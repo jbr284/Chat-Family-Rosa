@@ -5,7 +5,14 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 
 // --- CONFIGURAÇÃO (COLE SUAS CHAVES AQUI) ---
 const firebaseConfig = {
-    // ... COLE SUAS CHAVES DO CHAT AQUI ...
+  apiKey: "AIzaSyAB3KCfomPt3TAtV9mL4lx393TaMhNA5tY",
+  authDomain: "chat-family-rosa.firebaseapp.com",
+  databaseURL: "https://chat-family-rosa-default-rtdb.firebaseio.com",
+  projectId: "chat-family-rosa",
+  storageBucket: "chat-family-rosa.firebasestorage.app",
+  messagingSenderId: "237093132146",
+  appId: "1:237093132146:web:280b9c3a36f1bff6672feb"
+
 };
 
 // --- CADASTRO DA FAMÍLIA (Garanta que os emails estão iguais ao Authentication) ---
@@ -197,3 +204,4 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email, pass).catch(e => err.innerText = e.message);
 }
 window.fazerLogout = function() { signOut(auth); }
+
