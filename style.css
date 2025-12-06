@@ -10,37 +10,32 @@
 
 body { background-color: #d1d1d1; height: 100vh; overflow: hidden; }
 
-/* GERENCIADOR DE TELAS */
+/* TELAS */
 .screen { display: none; height: 100vh; flex-direction: column; }
 .screen.active { display: flex; }
 
-/* TELA LOGIN */
+/* LOGIN */
 #loginScreen { align-items: center; justify-content: center; background: var(--secondary); }
 .login-box { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 350px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
 .login-box button { width: 100%; padding: 12px; background: var(--secondary); color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
 .error-msg { color: red; font-size: 0.9em; margin-top: 10px; }
 
-/* CABEÇALHO GERAL */
+/* CABEÇALHO */
 header { background: var(--primary); color: white; padding: 15px; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .btn-sair, .btn-voltar { background: none; border: none; color: white; font-size: 1em; cursor: pointer; font-weight: bold; }
 .btn-voltar { font-size: 1.5em; margin-right: 5px; }
 
-/* TELA CONTATOS */
+/* CONTATOS */
 #contactsScreen { background: #f0f2f5; }
 .container-lista { padding: 20px; }
 .aviso-topo { margin-bottom: 15px; color: #555; font-size: 0.9em; }
-
-.contact-card {
-    background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px;
-    display: flex; align-items: center; cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: 0.2s;
-}
+.contact-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: 0.2s; }
 .contact-card:active { background-color: #eee; }
 .avatar { width: 40px; height: 40px; background: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-size: 1.2em; }
 .contact-name { font-weight: bold; color: #333; font-size: 1.1em; }
 
-/* TELA CHAT */
+/* CHAT */
 #chatScreen { background-color: var(--bg-chat); background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-repeat: repeat; background-size: 400px; }
 
 main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
@@ -50,7 +45,12 @@ main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction
 .message.theirs { align-self: flex-start; background-color: var(--other-bubble); border-top-left-radius: 0; }
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
 
-footer { background: #f0f0f0; padding: 10px; }
-footer form { display: flex; gap: 10px; }
+/* FOTOS NO CHAT */
+.chat-img { max-width: 100%; border-radius: 8px; margin-bottom: 5px; display: block; cursor: pointer; }
+
+/* RODAPÉ (FOOTER) */
+footer { background: #f0f0f0; padding: 10px; display: flex; align-items: center; gap: 10px; }
+.btn-anexo { background: none; border: none; font-size: 1.5em; cursor: pointer; padding: 0 10px; color: #555; }
+footer form { display: flex; gap: 10px; flex: 1; }
 footer input { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
-footer button { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; }
+footer button[type="submit"] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; }
