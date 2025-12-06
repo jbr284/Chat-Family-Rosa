@@ -16,9 +16,9 @@ const firebaseConfig = {
 // --- CADASTRO DA FAMÍLIA (Edite aqui!) ---
 // Isso serve para gerar a lista de contatos automaticamente
 const FAMILIA = [
-    { email: "pai@familia.com", nome: "Pai 👨🏻", avatar: "👨🏻" },
-    { email: "mae@familia.com", nome: "Mãe 👩🏼", avatar: "👩🏼" },
-    { email: "filha@familia.com", nome: "Filha 👧🏻", avatar: "👧🏻" }
+    { email: "joão@rosa.family", nome: "Pai 👨🏻", avatar: "👨🏻" },
+    { email: "noemi@rosa.family", nome: "Mãe 👩🏼", avatar: "👩🏼" },
+    { email: "lilica@rosa.family", nome: "Filha 👧🏻", avatar: "👧🏻" }
 ];
 
 const app = initializeApp(firebaseConfig);
