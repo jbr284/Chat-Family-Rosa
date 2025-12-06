@@ -40,7 +40,7 @@ header { background: var(--primary); color: white; padding: 15px; display: flex;
 
 main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
 
-.message { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); word-wrap: break-word; }
+.message { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); word-wrap: break-word; user-select: none; /* <--- ADICIONE ISSO AQUI */ cursor: pointer;   /* <--- E ISSO PARA SABER QUE É CLICÁVEL */}
 .message.mine { align-self: flex-end; background-color: var(--my-bubble); border-top-right-radius: 0; }
 .message.theirs { align-self: flex-start; background-color: var(--other-bubble); border-top-left-radius: 0; }
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
@@ -54,3 +54,4 @@ footer { background: #f0f0f0; padding: 10px; display: flex; align-items: center;
 footer form { display: flex; gap: 10px; flex: 1; }
 footer input { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
 footer button[type="submit"] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; }
+
