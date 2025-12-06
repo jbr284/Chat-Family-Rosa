@@ -26,8 +26,7 @@
         </header>
         <div class="container-lista">
             <p class="aviso-topo">Com quem você quer falar?</p>
-            <div id="listaContatos">
-                </div>
+            <div id="listaContatos"></div>
         </div>
     </div>
 
@@ -35,14 +34,17 @@
         <header>
             <button class="btn-voltar" onclick="voltarParaContatos()">⬅</button>
             <div class="header-info">
-                <h3 id="chatTitle">Nome do Contato</h3>
+                <h3 id="chatTitle">...</h3>
             </div>
         </header>
 
-        <main id="messagesList">
-            </main>
+        <main id="messagesList"></main>
 
         <footer>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="enviarFoto(this)">
+            
+            <button type="button" class="btn-anexo" onclick="document.getElementById('fileInput').click()">📎</button>
+            
             <form id="msgForm" onsubmit="enviarMensagem(event)">
                 <input type="text" id="msgInput" placeholder="Mensagem..." autocomplete="off">
                 <button type="submit">➤</button>
