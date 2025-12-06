@@ -5,53 +5,67 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Zap da Família</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body>
 
-    <div id="loginScreen" class="screen active">
+    <section id="login-screen">
         <div class="login-box">
-            <h2>🏡 Zap da Família</h2>
-            <p>Identifique-se:</p>
-            <input type="email" id="emailInput" placeholder="Seu e-mail">
-            <input type="password" id="passInput" placeholder="Sua senha">
-            <button onclick="fazerLogin()">Entrar</button>
-            <p id="loginError" class="error-msg"></p>
+            <h1>Zap da Família 💬</h1>
+            <p>Conecte-se para falar com a família</p>
+            <button id="btn-login" class="btn-primary">
+                <i class="material-icons" style="vertical-align: middle; margin-right: 8px;">login</i>
+                Entrar com Google
+            </button>
         </div>
-    </div>
+    </section>
 
-    <div id="contactsScreen" class="screen">
+    <section id="chat-screen" class="hidden">
         <header>
-            <h3>Meus Contatos</h3>
-            <button class="btn-sair" onclick="fazerLogout()">Sair</button>
-        </header>
-        <div class="container-lista">
-            <p class="aviso-topo">Com quem você quer falar?</p>
-            <div id="listaContatos"></div>
-        </div>
-    </div>
-
-    <div id="chatScreen" class="screen">
-        <header>
-            <button class="btn-voltar" onclick="voltarParaContatos()">⬅</button>
             <div class="header-info">
-                <h3 id="chatTitle">...</h3>
+                <h3>Família ❤️</h3>
+                <small id="user-name">Carregando...</small>
             </div>
+            <button id="btn-logout" class="icon-btn" title="Sair">
+                <i class="material-icons">logout</i>
+            </button>
         </header>
 
-        <main id="messagesList"></main>
+        <main id="messages-list">
+            <div class="msg system">
+                <p>Carregando conversas...</p>
+            </div>
+        </main>
 
         <footer>
-            <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="enviarFoto(this)">
+            <input type="file" id="file-input" accept="image/*" style="display: none;">
             
-            <button type="button" class="btn-anexo" onclick="document.getElementById('fileInput').click()">📎</button>
-            
-            <form id="msgForm" onsubmit="enviarMensagem(event)">
-                <input type="text" id="msgInput" placeholder="Mensagem..." autocomplete="off">
-                <button type="submit">➤</button>
-            </form>
-        </footer>
-    </div>
+            <button id="btn-attach" class="icon-btn">
+                <i class="material-icons">attach_file</i>
+            </button>
 
-    <script type="module" src="app.js"></script>
+            <div class="input-wrapper">
+                <input type="text" id="msg-input" placeholder="Mensagem" autocomplete="off">
+                <span id="recording-indicator" class="hidden">
+                    🔴 Gravando áudio...
+                </span>
+            </div>
+
+            <button id="btn-mic" class="icon-btn">
+                <i class="material-icons">mic</i>
+            </button>
+
+            <button id="btn-send" class="icon-btn send-btn" style="display: none;">
+                <i class="material-icons">send</i>
+            </button>
+        </footer>
+    </section>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
+
+    <script src="app.js"></script>
 </body>
 </html>
