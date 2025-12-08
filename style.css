@@ -15,28 +15,31 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-/* 1. TRAVAMOS A PÁGINA INTEIRA */
+/* ESTRUTURA BLINDADA PARA MOBILE */
 html, body {
-    height: 100%;       /* Ocupa 100% da altura disponível */
+    /* Altura calculada pelo JS via variável --vh */
+    height: 100vh; 
+    height: calc(var(--vh, 1vh) * 100);
+    
     width: 100%;
-    overflow: hidden;   /* PROIBIDO ROLAR A PÁGINA (A rolagem será só no chat) */
+    overflow: hidden; /* Trava a rolagem geral */
     background-color: #d1d1d1;
-    position: fixed;    /* Garante que o iOS não "quique" a página inteira */
+    position: fixed; /* Trava o "quique" do iOS */
 }
 
-/* 2. A TELA ATIVA VIRA UMA COLUNA FLEXÍVEL */
+/* TELAS FLEXÍVEIS */
 .screen { display: none; }
 
 .screen.active { 
-    display: flex;          /* Ativa o modo Flexbox */
-    flex-direction: column; /* Organiza: Cabeçalho -> Miolo -> Rodapé */
-    height: 100%;           /* Ocupa a altura exata do pai (body) */
+    display: flex;          
+    flex-direction: column; 
+    height: 100%;           
     width: 100%;
 }
 
-/* 3. CABEÇALHO (Não encolhe, não estica) */
+/* CABEÇALHO */
 header { 
-    flex: 0 0 auto; /* Tamanho fixo baseado no conteúdo */
+    flex: 0 0 auto; 
     background: var(--primary); 
     color: white; 
     padding: 15px; 
@@ -47,12 +50,12 @@ header {
     z-index: 10;
 }
 
-/* 4. O MIOLO DO CHAT (É AQUI QUE A MÁGICA ACONTECE) */
+/* MIOLO DO CHAT */
 main { 
-    flex: 1;            /* Ocupa TODO o espaço que sobrar entre header e footer */
-    overflow-y: auto;   /* Cria rolagem SÓ AQUI dentro se precisar */
-    
+    flex: 1;            
+    overflow-y: auto;   
     padding: 15px; 
+    padding-bottom: 20px;
     display: flex; 
     flex-direction: column; 
     gap: 8px; 
@@ -60,24 +63,18 @@ main {
     background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); 
     background-repeat: repeat; 
     background-size: 400px; 
-    
-    /* Rolagem macia no iPhone */
     -webkit-overflow-scrolling: touch; 
 }
 
-/* 5. RODAPÉ (Não encolhe, fica sempre visível no final do Flex) */
+/* RODAPÉ */
 footer { 
-    flex: 0 0 auto; /* Tamanho fixo */
+    flex: 0 0 auto; 
     background: #f0f0f0; 
     padding: 10px; 
-    
-    /* Segurança para iPhone X e novos */
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
 }
 
-/* --- ESTILOS VISUAIS (Bolinhas, Botões, etc) --- */
-
-/* Login Centralizado (Exceção) */
+/* LOGIN */
 #loginScreen.active {
     justify-content: center;
     align-items: center;
@@ -86,8 +83,9 @@ footer {
 .login-box { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 350px; text-align: center; }
 .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
 .login-box button { width: 100%; padding: 12px; background: var(--secondary); color: white; border: none; border-radius: 5px; font-weight: bold; }
+.error-msg { color: red; font-size: 0.9em; margin-top: 10px; }
 
-/* Mensagens */
+/* MENSAGENS */
 .message { 
     max-width: 85%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
     position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
@@ -96,10 +94,11 @@ footer {
 .message.mine { align-self: flex-end; background-color: var(--my-bubble); border-top-right-radius: 0; }
 .message.theirs { align-self: flex-start; background-color: var(--other-bubble); border-top-left-radius: 0; }
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
+
 .message img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 5px; }
 .message audio { width: 220px; height: 40px; margin-top: 5px; max-width: 100%; }
 
-/* Inputs e Botões do Rodapé */
+/* INPUTS E BOTÕES */
 footer form { display: flex; gap: 10px; align-items: center; width: 100%; }
 footer input[type=text] { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
 footer button[type=submit] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -113,7 +112,33 @@ footer button[type=submit] { background: var(--secondary); color: white; border:
 .btn-voltar { font-size: 1.5em; margin-right: 5px; }
 .btn-lixeira { margin-left: auto; }
 
-/* Contatos */
-.contact-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; cursor: pointer; }
+/* CONTATOS & BADGE DE NOTIFICAÇÃO 🔴 */
+.contact-card { 
+    background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; 
+    display: flex; align-items: center; cursor: pointer; position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
 .avatar { width: 40px; height: 40px; background: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-size: 1.2em; }
 .contact-name { font-weight: bold; color: #333; }
+
+.badge {
+    position: absolute;
+    top: 10px;
+    left: 45px; 
+    background-color: #25D366; 
+    color: white;
+    font-size: 0.75em;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 50%;
+    min-width: 20px;
+    text-align: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    border: 2px solid white;
+    display: none; 
+}
+.badge.visible {
+    display: block;
+    animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
