@@ -33,6 +33,10 @@ const FAMILIA = [
     }
 ];
 
+// --- SOM DE NOTIFICAÇÃO 🔔 ---
+// Link direto para um som curto de "ding"
+const somNotificacao = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -42,8 +46,9 @@ let usuarioAtual = null;
 let contatoAtual = null;
 let chatIdAtual = null;
 let unsubscribe = null;
+let primeiroCarregamento = true; // Flag para não tocar som ao abrir o app
 
-// Variáveis para Áudio
+// Variáveis para Áudio (Microfone)
 let mediaRecorder = null;
 let audioChunks = [];
 
@@ -63,6 +68,11 @@ onAuthStateChanged(auth, (user) => {
 window.mostrarTela = function(idTela) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(idTela).classList.add('active');
+    
+    // Se voltar para a lista, reseta o título
+    if(idTela !== 'chatScreen') {
+        document.title = "Zap da Família";
+    }
 }
 
 // 3. LÓGICA DE CONTATOS
@@ -94,6 +104,9 @@ window.abrirConversa = function(membroDestino) {
 
     document.getElementById('chatTitle').innerText = membroDestino.nome;
     mostrarTela('chatScreen');
+    
+    // Reseta flag para só tocar som em mensagens NOVAS
+    primeiroCarregamento = true; 
     iniciarEscutaMensagens();
 }
 
@@ -102,7 +115,7 @@ window.voltarParaContatos = function() {
     mostrarTela('contactsScreen');
 }
 
-// 5. CHAT EM TEMPO REAL (Texto, Foto e Áudio 🎤)
+// 5. CHAT EM TEMPO REAL (AGORA COM NOTIFICAÇÃO 🔔)
 function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
@@ -114,7 +127,25 @@ function iniciarEscutaMensagens() {
     );
 
     unsubscribe = onSnapshot(q, (snapshot) => {
+        // --- LÓGICA DE NOTIFICAÇÃO ---
+        // Verificamos o que mudou (adicionado, modificado, removido)
+        // docChanges é mais inteligente que ler tudo de novo
+        if (!primeiroCarregamento) {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    const novaMsg = change.doc.data();
+                    // Se a mensagem NÃO fui eu que mandei...
+                    if (novaMsg.remetente.toLowerCase() !== usuarioAtual.email.toLowerCase()) {
+                        tocarAlerta();
+                    }
+                }
+            });
+        }
+        primeiroCarregamento = false; // Já carregou o histórico inicial
+
+        // --- RENDERIZAÇÃO (Mantemos a lógica de limpar e redesenhar por segurança) ---
         chatBox.innerHTML = "";
+        
         if(snapshot.empty) {
             chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#888; font-size:0.9em">Nenhuma mensagem ainda.<br>Diga Oi! 👋</div>';
             return;
@@ -144,13 +175,12 @@ function iniciarEscutaMensagens() {
                 hora = d.getHours().toString().padStart(2,'0') + ":" + d.getMinutes().toString().padStart(2,'0');
             }
 
-            // --- EXIBIÇÃO POR TIPO ---
+            // Exibição por Tipo
             let conteudoHTML = "";
             if (msg.tipo === 'imagem') {
                 conteudoHTML = `<img src="${msg.texto}" alt="Foto" loading="lazy">`;
             } 
             else if (msg.tipo === 'audio') {
-                // Se for áudio, cria o player
                 conteudoHTML = `<audio controls src="${msg.texto}"></audio>`;
             } 
             else {
@@ -162,6 +192,20 @@ function iniciarEscutaMensagens() {
         });
         chatBox.scrollTo({ left: 0, top: chatBox.scrollHeight, behavior: 'smooth' });
     });
+}
+
+// FUNÇÃO AUXILIAR DE ALERTA
+function tocarAlerta() {
+    // 1. Toca o som
+    somNotificacao.play().catch(erro => console.log("Navegador bloqueou som automático:", erro));
+    
+    // 2. Muda o título da aba
+    document.title = "🔔 Nova Mensagem!";
+    
+    // 3. Volta o título ao normal depois de 3 segundos
+    setTimeout(() => {
+        document.title = "Zap da Família";
+    }, 3000);
 }
 
 // 6. ENVIAR TEXTO
@@ -186,7 +230,7 @@ window.enviarMensagem = async function(e) {
     }
 }
 
-// 7. ENVIAR ARQUIVO (FOTO)
+// 7. ENVIAR FOTO
 async function enviarArquivo(evento) {
     const input = evento.target; 
     const arquivo = input.files[0];
@@ -216,74 +260,62 @@ async function enviarArquivo(evento) {
     input.value = ""; 
 }
 
-// 8. GRAVAR E ENVIAR ÁUDIO (NOVO! 🎤)
+// 8. GRAVAR ÁUDIO
 async function alternarGravacao() {
     const btnMic = document.getElementById('btnMic');
 
-    // Se NÃO estiver gravando, começa
     if (!mediaRecorder || mediaRecorder.state === "inactive") {
         try {
-            // Pede permissão
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
 
-            // Quando receber dados de áudio, guarda
             mediaRecorder.ondataavailable = event => {
                 audioChunks.push(event.data);
             };
 
-            // Quando parar, cria o arquivo e envia
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                
-                // Feedback visual
                 const chatBox = document.getElementById('messagesList');
                 chatBox.innerHTML += `<div style="text-align:center; font-size:0.8em; color:#666;">Enviando áudio... 🎤</div>`;
                 chatBox.scrollTop = chatBox.scrollHeight;
 
-                // Envia para o Storage
                 const nomeArquivo = Date.now() + "_audio.webm";
                 const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
                 
                 await uploadBytes(storageRef, audioBlob);
                 const url = await getDownloadURL(storageRef);
 
-                // Salva no Banco
                 await addDoc(collection(db, "mensagens"), {
                     chatId: chatIdAtual,
-                    texto: url, // Link do audio
+                    texto: url, 
                     remetente: usuarioAtual.email.toLowerCase(),
-                    tipo: "audio", // TIPO IMPORTANTE
+                    tipo: "audio",
                     data: serverTimestamp()
                 });
             };
 
             mediaRecorder.start();
             btnMic.classList.add("gravando");
-            btnMic.innerText = "⏹️"; // Muda ícone para Stop
+            btnMic.innerText = "⏹️"; 
 
         } catch (err) {
             alert("Erro: Precisamos de permissão para usar o microfone.");
             console.error(err);
         }
-    } 
-    // Se estiver gravando, para
-    else {
+    } else {
         mediaRecorder.stop();
         btnMic.classList.remove("gravando");
-        btnMic.innerText = "🎤"; // Volta ícone original
+        btnMic.innerText = "🎤";
     }
 }
 
-// 9. EVENT LISTENERS (Conecta os botões ao código)
+// 9. LISTENERS
 const inputFile = document.getElementById('fileInput');
 if(inputFile) inputFile.addEventListener('change', enviarArquivo);
 
 const btnMic = document.getElementById('btnMic');
 if(btnMic) btnMic.addEventListener('click', alternarGravacao);
-
 
 // 10. LIMPAR CONVERSA
 window.limparConversaInteira = async function() {
