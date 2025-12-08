@@ -16,7 +16,7 @@
 body { 
     background-color: #d1d1d1; 
     height: 100vh; 
-    overflow: hidden; /* Evita rolagem da página inteira, só do chat */
+    overflow: hidden; 
 }
 
 /* GERENCIADOR DE TELAS */
@@ -62,13 +62,32 @@ main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction
 .message { 
     max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
     position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
-    word-wrap: break-word; word-break: break-word; /* Garante que palavras longas quebrem linha */
+    word-wrap: break-word; word-break: break-word;
 }
 .message.mine { align-self: flex-end; background-color: var(--my-bubble); border-top-right-radius: 0; }
 .message.theirs { align-self: flex-start; background-color: var(--other-bubble); border-top-left-radius: 0; }
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
 
+/* NOVO: Estilos para Imagens e Botão de Anexo */
+.message img {
+    max-width: 100%;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.btn-anexo {
+    font-size: 1.5em;
+    cursor: pointer;
+    padding: 0 10px;
+    color: #555;
+    display: flex;
+    align-items: center;
+    transition: 0.2s;
+}
+.btn-anexo:hover { color: var(--primary); transform: scale(1.1); }
+
 footer { background: #f0f0f0; padding: 10px; }
-footer form { display: flex; gap: 10px; }
-footer input { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
+footer form { display: flex; gap: 10px; align-items: center; }
+footer input[type=text] { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
 footer button { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; }
