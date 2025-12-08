@@ -3,7 +3,6 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from
 import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 
-// --- CONFIGURAÇÃO ---
 const firebaseConfig = {
   apiKey: "AIzaSyAB3KCfomPt3TAtV9mL4lx393TaMhNA5tY",
   authDomain: "chat-family-rosa.firebaseapp.com",
@@ -14,14 +13,12 @@ const firebaseConfig = {
   appId: "1:237093132146:web:280b9c3a36f1bff6672feb"
 };
 
-// --- CADASTRO DA FAMÍLIA ---
 const FAMILIA = [
     { email: "jbrosa2009@gmail.com", nome: "Pai 👨🏻", avatar: "👨🏻" },
     { email: "noemielidi@gmail.com", nome: "Mãe 👩🏼", avatar: "👩🏼" },
     { email: "rosajoaobatista943@gmail.com", nome: "Filha 👧🏻", avatar: "👧🏻" }
 ];
 
-// Som de notificação
 const somNotificacao = new Audio("https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3");
 
 const app = initializeApp(firebaseConfig);
@@ -35,41 +32,71 @@ let chatIdAtual = null;
 let unsubscribeChat = null; 
 let primeiroCarregamento = true;
 
-// Variáveis de Mídia
 let mediaRecorder = null;
 let audioChunks = [];
 
-// --- CORREÇÃO DE ALTURA (MÓVEL) ---
 function ajustarAlturaReal() {
-    // Pega a altura real da janela visível em pixels e passa para o CSS
     const vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', `${vh}px`);
 }
-// Roda ao iniciar e ao redimensionar
 ajustarAlturaReal();
 window.addEventListener('resize', ajustarAlturaReal);
 
-
-// 1. MONITOR DE LOGIN
 onAuthStateChanged(auth, (user) => {
     if (user) {
         usuarioAtual = user;
         mostrarTela('contactsScreen');
         gerarListaDeContatos();
+        verificarPermissaoNotificacao(); // Checa se já temos permissão
     } else {
         usuarioAtual = null;
         mostrarTela('loginScreen');
     }
 });
 
-// 2. FUNÇÕES DE NAVEGAÇÃO
+// --- LÓGICA DE NOTIFICAÇÃO DO SISTEMA 🔔 ---
+window.solicitarPermissaoNotificacao = function() {
+    if (!("Notification" in window)) {
+        alert("Seu navegador não suporta notificações.");
+        return;
+    }
+    
+    // Pede permissão ao usuário
+    Notification.requestPermission().then((permission) => {
+        if (permission === "granted") {
+            alert("Notificações ativadas! 🎉");
+            document.getElementById('avisoNotificacao').style.display = 'none';
+        }
+    });
+}
+
+function verificarPermissaoNotificacao() {
+    // Se o navegador suporta e ainda não foi permitido ou negado
+    if ("Notification" in window && Notification.permission === "default") {
+        document.getElementById('avisoNotificacao').style.display = 'block';
+    } else {
+        document.getElementById('avisoNotificacao').style.display = 'none';
+    }
+}
+
+// Envia a notificação para a barra de status do celular
+function dispararNotificacaoSistema(titulo, corpo) {
+    if (Notification.permission === "granted") {
+        // Cria a notificação na barra do sistema
+        new Notification(titulo, {
+            body: corpo,
+            icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png" // Ícone do WhatsApp genérico
+        });
+    }
+}
+// ------------------------------------------
+
 window.mostrarTela = function(idTela) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(idTela).classList.add('active');
     if(idTela !== 'chatScreen') document.title = "Zap da Família";
 }
 
-// 3. LÓGICA DE CONTATOS (COM BADGE 🔴)
 function gerarListaDeContatos() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = "";
@@ -89,7 +116,6 @@ function gerarListaDeContatos() {
         `;
         lista.appendChild(div);
 
-        // MONITOR DE MENSAGENS NÃO LIDAS PARA ESTE CONTATO
         const q = query(
             collection(db, "mensagens"),
             where("remetente", "==", membro.email.toLowerCase()),
@@ -105,9 +131,10 @@ function gerarListaDeContatos() {
                 if (count > 0) {
                     badge.innerText = count;
                     badge.classList.add('visible');
-                    // Toca som se estiver na tela de contatos e chegar msg nova
-                    if(document.getElementById('contactsScreen').classList.contains('active') && count > 0) {
-                        // Opcional: tocarAlerta() aqui se quiser som na lista também
+                    // NOTIFICAÇÃO NA TELA DE CONTATOS
+                    if(document.getElementById('contactsScreen').classList.contains('active')) {
+                        // Só toca se tiver mudado o número (evita loop)
+                        // Para simplificar, deixamos o som no chat, ou aqui se preferir
                     }
                 } else {
                     badge.classList.remove('visible');
@@ -117,7 +144,6 @@ function gerarListaDeContatos() {
     });
 }
 
-// 4. ABRIR CONVERSA
 window.abrirConversa = function(membroDestino) {
     contatoAtual = membroDestino;
     const meuEmail = usuarioAtual.email.toLowerCase();
@@ -132,11 +158,9 @@ window.abrirConversa = function(membroDestino) {
     primeiroCarregamento = true;
     iniciarEscutaMensagens();
     
-    // Marca mensagens como lidas imediatamente ao entrar
     marcarMensagensComoLidas(emailDele, meuEmail);
 }
 
-// FUNÇÃO PARA MARCAR COMO LIDO
 async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     const q = query(
         collection(db, "mensagens"),
@@ -146,7 +170,7 @@ async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     );
 
     const snapshot = await getDocs(q);
-    const batch = writeBatch(db); // Prepara para atualizar várias de uma vez
+    const batch = writeBatch(db); 
     
     snapshot.forEach(doc => {
         batch.update(doc.ref, { lido: true });
@@ -160,7 +184,6 @@ window.voltarParaContatos = function() {
     mostrarTela('contactsScreen');
 }
 
-// 5. CHAT EM TEMPO REAL
 function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
@@ -172,15 +195,24 @@ function iniciarEscutaMensagens() {
     );
 
     unsubscribeChat = onSnapshot(q, (snapshot) => {
-        // Notificação sonora quando o chat está aberto
         if (!primeiroCarregamento) {
             snapshot.docChanges().forEach((change) => {
                 if (change.type === "added") {
                     const novaMsg = change.doc.data();
-                    // Se a mensagem não é minha
                     if (novaMsg.remetente.toLowerCase() !== usuarioAtual.email.toLowerCase()) {
+                        
+                        // 1. Toca o som
                         tocarAlerta();
-                        // Se o chat está aberto, já marco como lido na hora
+                        
+                        // 2. Manda para a Barra de Status do Celular! 📲
+                        let corpoMsg = novaMsg.tipo === 'texto' ? novaMsg.texto : '📷 Enviou uma mídia';
+                        
+                        // Descobre o nome de quem mandou
+                        const remetenteObj = FAMILIA.find(f => f.email.toLowerCase() === novaMsg.remetente.toLowerCase());
+                        const nomeRemetente = remetenteObj ? remetenteObj.nome : "Alguém";
+
+                        dispararNotificacaoSistema(nomeRemetente, corpoMsg);
+
                         marcarMensagensComoLidas(novaMsg.remetente, usuarioAtual.email.toLowerCase());
                     }
                 }
@@ -202,13 +234,11 @@ function iniciarEscutaMensagens() {
             
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
             
-            // Ícone de status (✓ ou ✓✓)
             let statusIcon = "";
             if(souEu) {
                 statusIcon = msg.lido ? " <span style='color:#4fc3f7; font-size:0.8em'>✓✓</span>" : " <span style='color:#999; font-size:0.8em'>✓</span>";
             }
 
-            // Duplo clique para apagar
             if (souEu) {
                 div.addEventListener('dblclick', async () => {
                     if (confirm("Apagar mensagem?")) await deleteDoc(doc(db, "mensagens", msgId));
@@ -233,12 +263,11 @@ function iniciarEscutaMensagens() {
 }
 
 function tocarAlerta() {
-    somNotificacao.play().catch(e => console.log("Som bloqueado pelo navegador:", e));
+    somNotificacao.play().catch(e => console.log("Som bloqueado:", e));
     document.title = "🔔 Nova Mensagem!";
     setTimeout(() => { document.title = "Zap da Família"; }, 3000);
 }
 
-// 6. ENVIAR TEXTO (Com Destinatário e lido:false)
 window.enviarMensagem = async function(e) {
     e.preventDefault();
     const input = document.getElementById('msgInput');
@@ -261,7 +290,6 @@ window.enviarMensagem = async function(e) {
     } catch(err) { console.error(err); }
 }
 
-// 7. ENVIAR FOTO (Com Destinatário e lido:false)
 async function enviarArquivo(evento) {
     const input = evento.target; 
     const arquivo = input.files[0];
@@ -290,7 +318,6 @@ async function enviarArquivo(evento) {
     input.value = ""; 
 }
 
-// 8. GRAVAR ÁUDIO (Com Destinatário e lido:false)
 async function alternarGravacao() {
     const btnMic = document.getElementById('btnMic');
 
@@ -335,13 +362,11 @@ async function alternarGravacao() {
     }
 }
 
-// 9. LISTENERS (Botões do rodapé)
 const inputFile = document.getElementById('fileInput');
 if(inputFile) inputFile.addEventListener('change', enviarArquivo);
 const btnMic = document.getElementById('btnMic');
 if(btnMic) btnMic.addEventListener('click', alternarGravacao);
 
-// 10. LIMPAR CONVERSA
 window.limparConversaInteira = async function() {
     if (!confirm("Apagar TUDO?")) return;
     try {
@@ -353,7 +378,6 @@ window.limparConversaInteira = async function() {
     } catch (e) { console.error(e); }
 }
 
-// 11. LOGIN / LOGOUT
 window.fazerLogin = function() {
     const email = document.getElementById('emailInput').value;
     const pass = document.getElementById('passInput').value;
