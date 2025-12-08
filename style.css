@@ -5,6 +5,9 @@
     --my-bubble: #dcf8c6;
     --other-bubble: #ffffff;
     --record-red: #e74c3c;
+    /* Definimos alturas fixas para facilitar o cálculo */
+    --header-height: 60px;
+    --footer-height: 70px;
 }
 
 * { 
@@ -12,57 +15,110 @@
     margin: 0; 
     padding: 0; 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-    /* Remove o highlight azul ao tocar em botões no mobile */
     -webkit-tap-highlight-color: transparent;
 }
 
 body { 
     background-color: #d1d1d1; 
-    /* TRUQUE PARA MOBILE: dvh se adapta às barras do navegador */
-    height: 100dvh; 
-    /* Fallback para navegadores antigos */
+    /* Garante que o corpo ocupe a tela toda */
     height: 100vh;
-    overflow: hidden; 
-    display: flex;
-    flex-direction: column;
+    width: 100%;
+    overflow: hidden; /* Remove rolagem do corpo, só o chat rola */
 }
 
 /* GERENCIADOR DE TELAS */
 .screen { 
     display: none; 
-    /* A tela deve ocupar exatamente o espaço do corpo */
+    width: 100%; 
     height: 100%; 
-    flex-direction: column; 
-    width: 100%;
+    position: relative; /* Importante para o posicionamento */
 }
-.screen.active { display: flex; }
+.screen.active { display: block; } /* Mudamos de flex para block aqui */
 
-/* TELA LOGIN */
-#loginScreen { align-items: center; justify-content: center; background: var(--secondary); }
+/* TELA LOGIN (Centralizada) */
+#loginScreen.active { 
+    display: flex; /* Login continua flex para centralizar */
+    flex-direction: column;
+    align-items: center; 
+    justify-content: center; 
+    background: var(--secondary); 
+}
 .login-box { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 350px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
 .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
 .login-box button { width: 100%; padding: 12px; background: var(--secondary); color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
 .error-msg { color: red; font-size: 0.9em; margin-top: 10px; }
 
-/* CABEÇALHO GERAL */
+/* --- ESTRUTURA BLINDADA DO CHAT --- */
+
+/* 1. CABEÇALHO FIXO NO TOPO */
 header { 
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: var(--header-height);
+    
     background: var(--primary); 
     color: white; 
-    padding: 15px; 
+    padding: 0 15px; /* Padding lateral */
     display: flex; 
     align-items: center; 
     gap: 15px; 
     box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
-    flex-shrink: 0; /* Garante que o cabeçalho nunca encolha */
-    z-index: 10;
+    z-index: 100; /* Fica por cima de tudo */
 }
+
+/* 2. RODAPÉ FIXO NO CHÃO */
+footer { 
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: auto; /* Altura automática baseada no conteúdo */
+    min-height: var(--footer-height);
+    
+    background: #f0f0f0; 
+    padding: 10px; 
+    z-index: 100; /* Fica por cima de tudo */
+    
+    /* Proteção para iPhone X e novos (Barra preta inferior) */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
+/* 3. ÁREA DE MENSAGENS (O MIOLO) */
+main { 
+    /* Ocupa a tela toda */
+    height: 100vh;
+    width: 100%;
+    
+    /* O pulo do gato: Padding para não esconder conteúdo atrás das barras fixas */
+    padding-top: calc(var(--header-height) + 10px); 
+    padding-bottom: calc(var(--footer-height) + 20px); /* Um pouco mais no fundo */
+    padding-left: 15px;
+    padding-right: 15px;
+    
+    overflow-y: scroll; /* Só o miolo rola */
+    display: flex; 
+    flex-direction: column; 
+    gap: 8px; 
+    -webkit-overflow-scrolling: touch; 
+    
+    /* Imagem de Fundo */
+    background-color: var(--bg-chat); 
+    background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); 
+    background-repeat: repeat; 
+    background-size: 400px; 
+    background-attachment: fixed; /* Fundo parado */
+}
+
+/* BOTÕES E ELEMENTOS */
 .btn-sair, .btn-voltar, .btn-lixeira { background: none; border: none; color: white; font-size: 1em; cursor: pointer; font-weight: bold; }
 .btn-voltar { font-size: 1.5em; margin-right: 5px; }
 .btn-lixeira { font-size: 1.2em; margin-left: auto; }
 
-/* TELA CONTATOS */
-#contactsScreen { background: #f0f2f5; }
-.container-lista { padding: 20px; overflow-y: auto; flex: 1; }
+/* CONTATOS */
+#contactsScreen { background: #f0f2f5; padding-top: var(--header-height); }
+.container-lista { padding: 20px; padding-bottom: 80px; } /* Espaço extra embaixo */
 .aviso-topo { margin-bottom: 15px; color: #555; font-size: 0.9em; }
 
 .contact-card {
@@ -74,27 +130,7 @@ header {
 .avatar { width: 40px; height: 40px; background: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-size: 1.2em; }
 .contact-name { font-weight: bold; color: #333; font-size: 1.1em; }
 
-/* TELA CHAT */
-#chatScreen { 
-    background-color: var(--bg-chat); 
-    background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); 
-    background-repeat: repeat; 
-    background-size: 400px; 
-}
-
-/* MAIN (ONDE FICAM AS MENSAGENS) */
-main { 
-    flex: 1; /* Ocupa todo o espaço disponível entre Header e Footer */
-    overflow-y: auto; /* Permite rolagem apenas aqui dentro */
-    padding: 15px; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 8px; 
-    
-    /* Garante rolagem suave no iOS */
-    -webkit-overflow-scrolling: touch; 
-}
-
+/* MENSAGENS */
 .message { 
     max-width: 85%; 
     padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
@@ -110,33 +146,20 @@ main {
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
 
 .message img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 5px; }
-
-/* Player de Áudio */
 .message audio { width: 220px; height: 40px; margin-top: 5px; max-width: 100%; }
 
-/* RODAPÉ E BOTÕES */
-footer { 
-    background: #f0f0f0; 
-    padding: 10px; 
-    flex-shrink: 0; /* Garante que o rodapé nunca suma */
-    
-    /* Proteção para iPhone X/11/12/13/14/15 (Notch e Home Bar) */
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
-}
-
-footer form { display: flex; gap: 10px; align-items: center; }
+/* INPUTS DO RODAPÉ */
+footer form { display: flex; gap: 10px; align-items: center; width: 100%; }
 footer input[type=text] { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
-footer button[type=submit] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+footer button[type=submit] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
-/* Ícones */
-.btn-anexo { font-size: 1.5em; cursor: pointer; padding: 0 10px; color: #555; display: flex; align-items: center; }
+.btn-anexo { font-size: 1.5em; cursor: pointer; padding: 0 5px; color: #555; display: flex; align-items: center; }
 .btn-mic {
     background: none; border: none; font-size: 1.5em; cursor: pointer; color: #555;
     transition: 0.2s;
     width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
-    border-radius: 50%;
+    border-radius: 50%; flex-shrink: 0;
 }
-
 .btn-mic.gravando { color: white; background-color: var(--record-red); animation: pulsar 1.5s infinite; }
 
 @keyframes pulsar {
