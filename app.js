@@ -1,6 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-// NOVO: Adicionado deleteDoc e getDocs nas importações
 import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 
@@ -43,6 +42,10 @@ let usuarioAtual = null;
 let contatoAtual = null;
 let chatIdAtual = null;
 let unsubscribe = null;
+
+// Variáveis para Áudio
+let mediaRecorder = null;
+let audioChunks = [];
 
 // 1. MONITOR DE LOGIN
 onAuthStateChanged(auth, (user) => {
@@ -99,7 +102,7 @@ window.voltarParaContatos = function() {
     mostrarTela('contactsScreen');
 }
 
-// 5. CHAT EM TEMPO REAL
+// 5. CHAT EM TEMPO REAL (Texto, Foto e Áudio 🎤)
 function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
@@ -119,26 +122,18 @@ function iniciarEscutaMensagens() {
 
         snapshot.forEach((docSnapshot) => {
             const msg = docSnapshot.data();
-            // IMPORTANTE: Pegamos o ID "RG" da mensagem para poder apagar depois
             const msgId = docSnapshot.id; 
             
             const div = document.createElement('div');
             const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
             
-            // --- NOVO: APAGAR MENSAGEM ---
-            // Adiciona evento de "Duplo Clique" para apagar a mensagem
-            if (souEu) { // Só permite apagar se a mensagem for minha
+            // Apagar Mensagem
+            if (souEu) {
                 div.title = "Dê dois cliques para apagar";
                 div.addEventListener('dblclick', async () => {
-                    const confirmar = confirm("Deseja apagar esta mensagem?");
-                    if (confirmar) {
-                        try {
-                            await deleteDoc(doc(db, "mensagens", msgId));
-                            // O onSnapshot vai atualizar a tela sozinho!
-                        } catch (e) {
-                            alert("Erro ao apagar: " + e.message);
-                        }
+                    if (confirm("Deseja apagar esta mensagem?")) {
+                        await deleteDoc(doc(db, "mensagens", msgId));
                     }
                 });
             }
@@ -149,10 +144,16 @@ function iniciarEscutaMensagens() {
                 hora = d.getHours().toString().padStart(2,'0') + ":" + d.getMinutes().toString().padStart(2,'0');
             }
 
+            // --- EXIBIÇÃO POR TIPO ---
             let conteudoHTML = "";
             if (msg.tipo === 'imagem') {
-                conteudoHTML = `<img src="${msg.texto}" alt="Foto enviada" loading="lazy">`;
-            } else {
+                conteudoHTML = `<img src="${msg.texto}" alt="Foto" loading="lazy">`;
+            } 
+            else if (msg.tipo === 'audio') {
+                // Se for áudio, cria o player
+                conteudoHTML = `<audio controls src="${msg.texto}"></audio>`;
+            } 
+            else {
                 conteudoHTML = msg.texto;
             }
 
@@ -185,7 +186,7 @@ window.enviarMensagem = async function(e) {
     }
 }
 
-// 7. ENVIAR ARQUIVO
+// 7. ENVIAR ARQUIVO (FOTO)
 async function enviarArquivo(evento) {
     const input = evento.target; 
     const arquivo = input.files[0];
@@ -198,7 +199,6 @@ async function enviarArquivo(evento) {
     try {
         const nomeArquivo = Date.now() + "_" + arquivo.name;
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
-
         await uploadBytes(storageRef, arquivo);
         const url = await getDownloadURL(storageRef);
 
@@ -210,45 +210,92 @@ async function enviarArquivo(evento) {
             data: serverTimestamp()
         });
     } catch (error) {
-        console.error("Erro upload:", error);
+        console.error(error);
         alert("Erro ao enviar imagem.");
     }
     input.value = ""; 
 }
 
-const inputFile = document.getElementById('fileInput');
-if(inputFile) {
-    inputFile.addEventListener('change', enviarArquivo);
-}
+// 8. GRAVAR E ENVIAR ÁUDIO (NOVO! 🎤)
+async function alternarGravacao() {
+    const btnMic = document.getElementById('btnMic');
 
-// 8. LIMPAR CONVERSA INTEIRA (NOVO! 🗑️)
-window.limparConversaInteira = async function() {
-    const certeza = confirm("Tem certeza que deseja apagar TODAS as mensagens dessa conversa? Isso não pode ser desfeito.");
-    if (!certeza) return;
+    // Se NÃO estiver gravando, começa
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+        try {
+            // Pede permissão
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
 
-    try {
-        // 1. Busca todas as mensagens desta sala
-        const q = query(
-            collection(db, "mensagens"), 
-            where("chatId", "==", chatIdAtual)
-        );
-        
-        const snapshot = await getDocs(q);
+            // Quando receber dados de áudio, guarda
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
 
-        // 2. Apaga uma por uma
-        // (Nota: Em apps grandes, usaria "Batch", mas loop é mais fácil de entender agora)
-        snapshot.forEach(async (docSnapshot) => {
-            await deleteDoc(doc(db, "mensagens", docSnapshot.id));
-        });
+            // Quando parar, cria o arquivo e envia
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                
+                // Feedback visual
+                const chatBox = document.getElementById('messagesList');
+                chatBox.innerHTML += `<div style="text-align:center; font-size:0.8em; color:#666;">Enviando áudio... 🎤</div>`;
+                chatBox.scrollTop = chatBox.scrollHeight;
 
-        alert("Conversa limpa!");
-    } catch (e) {
-        console.error("Erro ao limpar:", e);
-        alert("Erro ao limpar conversa.");
+                // Envia para o Storage
+                const nomeArquivo = Date.now() + "_audio.webm";
+                const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
+                
+                await uploadBytes(storageRef, audioBlob);
+                const url = await getDownloadURL(storageRef);
+
+                // Salva no Banco
+                await addDoc(collection(db, "mensagens"), {
+                    chatId: chatIdAtual,
+                    texto: url, // Link do audio
+                    remetente: usuarioAtual.email.toLowerCase(),
+                    tipo: "audio", // TIPO IMPORTANTE
+                    data: serverTimestamp()
+                });
+            };
+
+            mediaRecorder.start();
+            btnMic.classList.add("gravando");
+            btnMic.innerText = "⏹️"; // Muda ícone para Stop
+
+        } catch (err) {
+            alert("Erro: Precisamos de permissão para usar o microfone.");
+            console.error(err);
+        }
+    } 
+    // Se estiver gravando, para
+    else {
+        mediaRecorder.stop();
+        btnMic.classList.remove("gravando");
+        btnMic.innerText = "🎤"; // Volta ícone original
     }
 }
 
-// 9. LOGIN / LOGOUT
+// 9. EVENT LISTENERS (Conecta os botões ao código)
+const inputFile = document.getElementById('fileInput');
+if(inputFile) inputFile.addEventListener('change', enviarArquivo);
+
+const btnMic = document.getElementById('btnMic');
+if(btnMic) btnMic.addEventListener('click', alternarGravacao);
+
+
+// 10. LIMPAR CONVERSA
+window.limparConversaInteira = async function() {
+    if (!confirm("Apagar TUDO?")) return;
+    try {
+        const q = query(collection(db, "mensagens"), where("chatId", "==", chatIdAtual));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(async (d) => await deleteDoc(doc(db, "mensagens", d.id)));
+    } catch (e) { console.error(e); }
+}
+
+// 11. LOGIN / LOGOUT
 window.fazerLogin = function() {
     const email = document.getElementById('emailInput').value;
     const pass = document.getElementById('passInput').value;
