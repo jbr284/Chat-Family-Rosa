@@ -27,11 +27,13 @@ header {
     display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 10;
 }
 
-/* NOVA BARRA DE AVISO (Para pedir notificação) */
+/* BARRA DE AVISO */
 .barra-aviso {
-    background-color: #fff3cd; color: #856404; padding: 10px; text-align: center;
+    background-color: #fff3cd; color: #856404; padding: 15px; text-align: center;
     font-size: 0.9em; cursor: pointer; border-bottom: 1px solid #ffeeba;
+    font-weight: bold;
 }
+.barra-aviso:active { background-color: #ffeeba; }
 
 main { 
     flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 20px;
