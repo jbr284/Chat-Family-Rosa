@@ -13,11 +13,23 @@ const firebaseConfig = {
   appId: "1:237093132146:web:280b9c3a36f1bff6672feb"
 };
 
-// --- CADASTRO DA FAMÍLIA ---
+// --- CADASTRO DA FAMÍLIA (CORRIGIDO: Pai e Filha trocados) ---
 const FAMILIA = [
-    { email: "joão@rosa.family", nome: "Pai 👨🏻", avatar: "👨🏻" },
-    { email: "noemi@rosa.family", nome: "Mãe 👩🏼", avatar: "👩🏼" },
-    { email: "lilica@rosa.family", nome: "Filha 👧🏻", avatar: "👧🏻" }
+    { 
+        email: "jbrosa2009@gmail.com", 
+        nome: "Pai 👨🏻", 
+        avatar: "👨🏻" 
+    },
+    { 
+        email: "noemielidi@gmail.com", 
+        nome: "Mãe 👩🏼", 
+        avatar: "👩🏼" 
+    },
+    { 
+        email: "rosajoaobatista943@gmail.com", 
+        nome: "Filha 👧🏻", 
+        avatar: "👧🏻" 
+    }
 ];
 
 const app = initializeApp(firebaseConfig);
@@ -177,3 +189,4 @@ window.fazerLogin = function() {
 window.fazerLogout = function() {
     signOut(auth);
 }
+
