@@ -5,9 +5,6 @@
     --my-bubble: #dcf8c6;
     --other-bubble: #ffffff;
     --record-red: #e74c3c;
-    /* Definimos alturas fixas para facilitar o cálculo */
-    --header-height: 60px;
-    --footer-height: 70px;
 }
 
 * { 
@@ -18,152 +15,105 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-body { 
-    background-color: #d1d1d1; 
-    /* Garante que o corpo ocupe a tela toda */
-    height: 100vh;
+/* 1. TRAVAMOS A PÁGINA INTEIRA */
+html, body {
+    height: 100%;       /* Ocupa 100% da altura disponível */
     width: 100%;
-    overflow: hidden; /* Remove rolagem do corpo, só o chat rola */
+    overflow: hidden;   /* PROIBIDO ROLAR A PÁGINA (A rolagem será só no chat) */
+    background-color: #d1d1d1;
+    position: fixed;    /* Garante que o iOS não "quique" a página inteira */
 }
 
-/* GERENCIADOR DE TELAS */
-.screen { 
-    display: none; 
-    width: 100%; 
-    height: 100%; 
-    position: relative; /* Importante para o posicionamento */
+/* 2. A TELA ATIVA VIRA UMA COLUNA FLEXÍVEL */
+.screen { display: none; }
+
+.screen.active { 
+    display: flex;          /* Ativa o modo Flexbox */
+    flex-direction: column; /* Organiza: Cabeçalho -> Miolo -> Rodapé */
+    height: 100%;           /* Ocupa a altura exata do pai (body) */
+    width: 100%;
 }
-.screen.active { display: block; } /* Mudamos de flex para block aqui */
 
-/* TELA LOGIN (Centralizada) */
-#loginScreen.active { 
-    display: flex; /* Login continua flex para centralizar */
-    flex-direction: column;
-    align-items: center; 
-    justify-content: center; 
-    background: var(--secondary); 
-}
-.login-box { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 350px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-.login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
-.login-box button { width: 100%; padding: 12px; background: var(--secondary); color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
-.error-msg { color: red; font-size: 0.9em; margin-top: 10px; }
-
-/* --- ESTRUTURA BLINDADA DO CHAT --- */
-
-/* 1. CABEÇALHO FIXO NO TOPO */
+/* 3. CABEÇALHO (Não encolhe, não estica) */
 header { 
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: var(--header-height);
-    
+    flex: 0 0 auto; /* Tamanho fixo baseado no conteúdo */
     background: var(--primary); 
     color: white; 
-    padding: 0 15px; /* Padding lateral */
+    padding: 15px; 
     display: flex; 
     align-items: center; 
     gap: 15px; 
     box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
-    z-index: 100; /* Fica por cima de tudo */
+    z-index: 10;
 }
 
-/* 2. RODAPÉ FIXO NO CHÃO */
-footer { 
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: auto; /* Altura automática baseada no conteúdo */
-    min-height: var(--footer-height);
-    
-    background: #f0f0f0; 
-    padding: 10px; 
-    z-index: 100; /* Fica por cima de tudo */
-    
-    /* Proteção para iPhone X e novos (Barra preta inferior) */
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
-}
-
-/* 3. ÁREA DE MENSAGENS (O MIOLO) */
+/* 4. O MIOLO DO CHAT (É AQUI QUE A MÁGICA ACONTECE) */
 main { 
-    /* Ocupa a tela toda */
-    height: 100vh;
-    width: 100%;
+    flex: 1;            /* Ocupa TODO o espaço que sobrar entre header e footer */
+    overflow-y: auto;   /* Cria rolagem SÓ AQUI dentro se precisar */
     
-    /* O pulo do gato: Padding para não esconder conteúdo atrás das barras fixas */
-    padding-top: calc(var(--header-height) + 10px); 
-    padding-bottom: calc(var(--footer-height) + 20px); /* Um pouco mais no fundo */
-    padding-left: 15px;
-    padding-right: 15px;
-    
-    overflow-y: scroll; /* Só o miolo rola */
+    padding: 15px; 
     display: flex; 
     flex-direction: column; 
     gap: 8px; 
-    -webkit-overflow-scrolling: touch; 
-    
-    /* Imagem de Fundo */
     background-color: var(--bg-chat); 
     background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); 
     background-repeat: repeat; 
     background-size: 400px; 
-    background-attachment: fixed; /* Fundo parado */
+    
+    /* Rolagem macia no iPhone */
+    -webkit-overflow-scrolling: touch; 
 }
 
-/* BOTÕES E ELEMENTOS */
-.btn-sair, .btn-voltar, .btn-lixeira { background: none; border: none; color: white; font-size: 1em; cursor: pointer; font-weight: bold; }
-.btn-voltar { font-size: 1.5em; margin-right: 5px; }
-.btn-lixeira { font-size: 1.2em; margin-left: auto; }
-
-/* CONTATOS */
-#contactsScreen { background: #f0f2f5; padding-top: var(--header-height); }
-.container-lista { padding: 20px; padding-bottom: 80px; } /* Espaço extra embaixo */
-.aviso-topo { margin-bottom: 15px; color: #555; font-size: 0.9em; }
-
-.contact-card {
-    background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px;
-    display: flex; align-items: center; cursor: pointer;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: 0.2s;
+/* 5. RODAPÉ (Não encolhe, fica sempre visível no final do Flex) */
+footer { 
+    flex: 0 0 auto; /* Tamanho fixo */
+    background: #f0f0f0; 
+    padding: 10px; 
+    
+    /* Segurança para iPhone X e novos */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
 }
-.contact-card:active { background-color: #eee; }
-.avatar { width: 40px; height: 40px; background: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-size: 1.2em; }
-.contact-name { font-weight: bold; color: #333; font-size: 1.1em; }
 
-/* MENSAGENS */
+/* --- ESTILOS VISUAIS (Bolinhas, Botões, etc) --- */
+
+/* Login Centralizado (Exceção) */
+#loginScreen.active {
+    justify-content: center;
+    align-items: center;
+    background: var(--secondary);
+}
+.login-box { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 350px; text-align: center; }
+.login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
+.login-box button { width: 100%; padding: 12px; background: var(--secondary); color: white; border: none; border-radius: 5px; font-weight: bold; }
+
+/* Mensagens */
 .message { 
-    max-width: 85%; 
-    padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
+    max-width: 85%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
     position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
-    word-wrap: break-word; 
-    user-select: none; 
-    cursor: context-menu;
+    word-wrap: break-word; user-select: none; 
 }
-.message:active { transform: scale(0.98); }
-
 .message.mine { align-self: flex-end; background-color: var(--my-bubble); border-top-right-radius: 0; }
 .message.theirs { align-self: flex-start; background-color: var(--other-bubble); border-top-left-radius: 0; }
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
-
 .message img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 5px; }
 .message audio { width: 220px; height: 40px; margin-top: 5px; max-width: 100%; }
 
-/* INPUTS DO RODAPÉ */
+/* Inputs e Botões do Rodapé */
 footer form { display: flex; gap: 10px; align-items: center; width: 100%; }
 footer input[type=text] { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
 footer button[type=submit] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
 .btn-anexo { font-size: 1.5em; cursor: pointer; padding: 0 5px; color: #555; display: flex; align-items: center; }
-.btn-mic {
-    background: none; border: none; font-size: 1.5em; cursor: pointer; color: #555;
-    transition: 0.2s;
-    width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
-    border-radius: 50%; flex-shrink: 0;
-}
+.btn-mic { background: none; border: none; font-size: 1.5em; cursor: pointer; color: #555; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
 .btn-mic.gravando { color: white; background-color: var(--record-red); animation: pulsar 1.5s infinite; }
+@keyframes pulsar { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 
-@keyframes pulsar {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-}
+.btn-voltar, .btn-lixeira, .btn-sair { background: none; border: none; color: white; font-size: 1.2em; font-weight: bold; cursor: pointer; }
+.btn-voltar { font-size: 1.5em; margin-right: 5px; }
+.btn-lixeira { margin-left: auto; }
+
+/* Contatos */
+.contact-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; cursor: pointer; }
+.avatar { width: 40px; height: 40px; background: #ddd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 15px; font-size: 1.2em; }
+.contact-name { font-weight: bold; color: #333; }
