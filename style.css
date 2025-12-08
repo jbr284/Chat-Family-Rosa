@@ -32,8 +32,9 @@ body {
 
 /* CABEÇALHO GERAL */
 header { background: var(--primary); color: white; padding: 15px; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-.btn-sair, .btn-voltar { background: none; border: none; color: white; font-size: 1em; cursor: pointer; font-weight: bold; }
+.btn-sair, .btn-voltar, .btn-lixeira { background: none; border: none; color: white; font-size: 1em; cursor: pointer; font-weight: bold; }
 .btn-voltar { font-size: 1.5em; margin-right: 5px; }
+.btn-lixeira { font-size: 1.2em; margin-left: auto; /* Empurra pra direita */ }
 
 /* TELA CONTATOS */
 #contactsScreen { background: #f0f2f5; }
@@ -63,12 +64,16 @@ main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction
     max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
     position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
     word-wrap: break-word; word-break: break-word;
+    /* NOVO: Indica que dá para interagir */
+    user-select: none; 
+    cursor: context-menu;
 }
+.message:active { transform: scale(0.98); } /* Efeito visual ao clicar */
+
 .message.mine { align-self: flex-end; background-color: var(--my-bubble); border-top-right-radius: 0; }
 .message.theirs { align-self: flex-start; background-color: var(--other-bubble); border-top-left-radius: 0; }
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
 
-/* NOVO: Estilos para Imagens e Botão de Anexo */
 .message img {
     max-width: 100%;
     border-radius: 8px;
