@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Zap da Família</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
 </head>
 <body>
 
@@ -24,6 +25,11 @@
             <h3>Meus Contatos</h3>
             <button class="btn-sair" onclick="fazerLogout()">Sair</button>
         </header>
+        
+        <div id="avisoNotificacao" class="barra-aviso" style="display:none" onclick="solicitarPermissaoNotificacao()">
+            🔔 Toque aqui para ativar notificações
+        </div>
+
         <div class="container-lista">
             <p class="aviso-topo">Com quem você quer falar?</p>
             <div id="listaContatos">
@@ -51,7 +57,6 @@
                 <input type="text" id="msgInput" placeholder="Mensagem..." autocomplete="off">
                 
                 <button type="button" id="btnMic" class="btn-mic">🎤</button>
-
                 <button type="submit" id="btnEnviar">➤</button>
             </form>
         </footer>
