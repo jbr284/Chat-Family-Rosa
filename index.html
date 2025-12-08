@@ -12,7 +12,7 @@
         <div class="login-box">
             <h2>🏡 Zap da Família</h2>
             <p>Identifique-se para entrar:</p>
-            <input type="email" id="emailInput" placeholder="Seu e-mail (ex: pai@rosa.family)">
+            <input type="email" id="emailInput" placeholder="Seu e-mail (ex: pai@gmail.com)">
             <input type="password" id="passInput" placeholder="Sua senha">
             <button onclick="fazerLogin()">Entrar</button>
             <p id="loginError" class="error-msg"></p>
@@ -45,7 +45,7 @@
         <footer>
             <form id="msgForm" onsubmit="enviarMensagem(event)">
                 <label for="fileInput" class="btn-anexo">📎</label>
-                <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="enviarArquivo(this)">
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
 
                 <input type="text" id="msgInput" placeholder="Mensagem..." autocomplete="off">
                 <button type="submit">➤</button>
