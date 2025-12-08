@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+// NOVO: Adicionado deleteDoc e getDocs nas importações
+import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 
 // --- CONFIGURAÇÃO ---
@@ -116,19 +117,38 @@ function iniciarEscutaMensagens() {
             return;
         }
 
-        snapshot.forEach((doc) => {
-            const msg = doc.data();
+        snapshot.forEach((docSnapshot) => {
+            const msg = docSnapshot.data();
+            // IMPORTANTE: Pegamos o ID "RG" da mensagem para poder apagar depois
+            const msgId = docSnapshot.id; 
+            
             const div = document.createElement('div');
             const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
             
+            // --- NOVO: APAGAR MENSAGEM ---
+            // Adiciona evento de "Duplo Clique" para apagar a mensagem
+            if (souEu) { // Só permite apagar se a mensagem for minha
+                div.title = "Dê dois cliques para apagar";
+                div.addEventListener('dblclick', async () => {
+                    const confirmar = confirm("Deseja apagar esta mensagem?");
+                    if (confirmar) {
+                        try {
+                            await deleteDoc(doc(db, "mensagens", msgId));
+                            // O onSnapshot vai atualizar a tela sozinho!
+                        } catch (e) {
+                            alert("Erro ao apagar: " + e.message);
+                        }
+                    }
+                });
+            }
+
             let hora = "...";
             if(msg.data) {
                 const d = msg.data.toDate();
                 hora = d.getHours().toString().padStart(2,'0') + ":" + d.getMinutes().toString().padStart(2,'0');
             }
 
-            // Exibe Imagem ou Texto
             let conteudoHTML = "";
             if (msg.tipo === 'imagem') {
                 conteudoHTML = `<img src="${msg.texto}" alt="Foto enviada" loading="lazy">`;
@@ -165,9 +185,9 @@ window.enviarMensagem = async function(e) {
     }
 }
 
-// 7. ENVIAR ARQUIVO (Esta é a função que o botão vai chamar)
+// 7. ENVIAR ARQUIVO
 async function enviarArquivo(evento) {
-    const input = evento.target; // Pega o input que foi clicado
+    const input = evento.target; 
     const arquivo = input.files[0];
     if (!arquivo) return;
 
@@ -196,11 +216,36 @@ async function enviarArquivo(evento) {
     input.value = ""; 
 }
 
-// 8. ESCUTADOR DE EVENTOS (Onde a mágica da correção acontece 🪄)
-// Isso conecta o botão à função Javascript sem precisar do HTML
 const inputFile = document.getElementById('fileInput');
 if(inputFile) {
     inputFile.addEventListener('change', enviarArquivo);
+}
+
+// 8. LIMPAR CONVERSA INTEIRA (NOVO! 🗑️)
+window.limparConversaInteira = async function() {
+    const certeza = confirm("Tem certeza que deseja apagar TODAS as mensagens dessa conversa? Isso não pode ser desfeito.");
+    if (!certeza) return;
+
+    try {
+        // 1. Busca todas as mensagens desta sala
+        const q = query(
+            collection(db, "mensagens"), 
+            where("chatId", "==", chatIdAtual)
+        );
+        
+        const snapshot = await getDocs(q);
+
+        // 2. Apaga uma por uma
+        // (Nota: Em apps grandes, usaria "Batch", mas loop é mais fácil de entender agora)
+        snapshot.forEach(async (docSnapshot) => {
+            await deleteDoc(doc(db, "mensagens", docSnapshot.id));
+        });
+
+        alert("Conversa limpa!");
+    } catch (e) {
+        console.error("Erro ao limpar:", e);
+        alert("Erro ao limpar conversa.");
+    }
 }
 
 // 9. LOGIN / LOGOUT
