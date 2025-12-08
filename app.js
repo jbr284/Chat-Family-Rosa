@@ -47,31 +47,32 @@ onAuthStateChanged(auth, (user) => {
         usuarioAtual = user;
         mostrarTela('contactsScreen');
         gerarListaDeContatos();
-        verificarPermissaoNotificacao(); // Checa se já temos permissão
+        verificarPermissaoNotificacao();
     } else {
         usuarioAtual = null;
         mostrarTela('loginScreen');
     }
 });
 
-// --- LÓGICA DE NOTIFICAÇÃO DO SISTEMA 🔔 ---
-window.solicitarPermissaoNotificacao = function() {
+// --- LÓGICA DE NOTIFICAÇÃO 🔔 ---
+function solicitarPermissaoNotificacao() {
     if (!("Notification" in window)) {
-        alert("Seu navegador não suporta notificações.");
+        alert("Navegador sem suporte a notificações.");
         return;
     }
     
-    // Pede permissão ao usuário
+    // IMPORTANTE: Isso só funciona se o site estiver em HTTPS ou Localhost!
     Notification.requestPermission().then((permission) => {
         if (permission === "granted") {
-            alert("Notificações ativadas! 🎉");
+            alert("Sucesso! Notificações ativadas. 🎉");
             document.getElementById('avisoNotificacao').style.display = 'none';
+        } else {
+            alert("Permissão negada ou bloqueada. Verifique as configurações do site.");
         }
     });
 }
 
 function verificarPermissaoNotificacao() {
-    // Se o navegador suporta e ainda não foi permitido ou negado
     if ("Notification" in window && Notification.permission === "default") {
         document.getElementById('avisoNotificacao').style.display = 'block';
     } else {
@@ -79,16 +80,27 @@ function verificarPermissaoNotificacao() {
     }
 }
 
-// Envia a notificação para a barra de status do celular
 function dispararNotificacaoSistema(titulo, corpo) {
     if (Notification.permission === "granted") {
-        // Cria a notificação na barra do sistema
-        new Notification(titulo, {
-            body: corpo,
-            icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png" // Ícone do WhatsApp genérico
-        });
+        // Tenta enviar a notificação (funciona melhor se app estiver minimizado)
+        try {
+            new Notification(titulo, {
+                body: corpo,
+                icon: "https://cdn-icons-png.flaticon.com/512/733/733585.png",
+                vibrate: [200, 100, 200]
+            });
+        } catch (e) {
+            console.log("Erro ao notificar:", e);
+        }
     }
 }
+
+// LIGA O BOTÃO DE NOTIFICAÇÃO AO CLIQUE (MODO CORRETO ✅)
+const btnAviso = document.getElementById('avisoNotificacao');
+if(btnAviso) {
+    btnAviso.addEventListener('click', solicitarPermissaoNotificacao);
+}
+
 // ------------------------------------------
 
 window.mostrarTela = function(idTela) {
@@ -126,16 +138,10 @@ function gerarListaDeContatos() {
         onSnapshot(q, (snapshot) => {
             const count = snapshot.size; 
             const badge = document.getElementById(`badge-${membro.email}`);
-            
             if (badge) {
                 if (count > 0) {
                     badge.innerText = count;
                     badge.classList.add('visible');
-                    // NOTIFICAÇÃO NA TELA DE CONTATOS
-                    if(document.getElementById('contactsScreen').classList.contains('active')) {
-                        // Só toca se tiver mudado o número (evita loop)
-                        // Para simplificar, deixamos o som no chat, ou aqui se preferir
-                    }
                 } else {
                     badge.classList.remove('visible');
                 }
@@ -157,7 +163,6 @@ window.abrirConversa = function(membroDestino) {
     
     primeiroCarregamento = true;
     iniciarEscutaMensagens();
-    
     marcarMensagensComoLidas(emailDele, meuEmail);
 }
 
@@ -171,11 +176,7 @@ async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
 
     const snapshot = await getDocs(q);
     const batch = writeBatch(db); 
-    
-    snapshot.forEach(doc => {
-        batch.update(doc.ref, { lido: true });
-    });
-
+    snapshot.forEach(doc => batch.update(doc.ref, { lido: true }));
     if (!snapshot.empty) await batch.commit();
 }
 
@@ -201,18 +202,13 @@ function iniciarEscutaMensagens() {
                     const novaMsg = change.doc.data();
                     if (novaMsg.remetente.toLowerCase() !== usuarioAtual.email.toLowerCase()) {
                         
-                        // 1. Toca o som
                         tocarAlerta();
                         
-                        // 2. Manda para a Barra de Status do Celular! 📲
                         let corpoMsg = novaMsg.tipo === 'texto' ? novaMsg.texto : '📷 Enviou uma mídia';
-                        
-                        // Descobre o nome de quem mandou
                         const remetenteObj = FAMILIA.find(f => f.email.toLowerCase() === novaMsg.remetente.toLowerCase());
                         const nomeRemetente = remetenteObj ? remetenteObj.nome : "Alguém";
 
                         dispararNotificacaoSistema(nomeRemetente, corpoMsg);
-
                         marcarMensagensComoLidas(novaMsg.remetente, usuarioAtual.email.toLowerCase());
                     }
                 }
