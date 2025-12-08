@@ -4,7 +4,7 @@
     --bg-chat: #e5ddd5;
     --my-bubble: #dcf8c6;
     --other-bubble: #ffffff;
-    --record-red: #e74c3c; /* Cor vermelha para gravação */
+    --record-red: #e74c3c;
 }
 
 * { 
@@ -12,16 +12,29 @@
     margin: 0; 
     padding: 0; 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+    /* Remove o highlight azul ao tocar em botões no mobile */
+    -webkit-tap-highlight-color: transparent;
 }
 
 body { 
     background-color: #d1d1d1; 
-    height: 100vh; 
+    /* TRUQUE PARA MOBILE: dvh se adapta às barras do navegador */
+    height: 100dvh; 
+    /* Fallback para navegadores antigos */
+    height: 100vh;
     overflow: hidden; 
+    display: flex;
+    flex-direction: column;
 }
 
 /* GERENCIADOR DE TELAS */
-.screen { display: none; height: 100vh; flex-direction: column; }
+.screen { 
+    display: none; 
+    /* A tela deve ocupar exatamente o espaço do corpo */
+    height: 100%; 
+    flex-direction: column; 
+    width: 100%;
+}
 .screen.active { display: flex; }
 
 /* TELA LOGIN */
@@ -32,14 +45,24 @@ body {
 .error-msg { color: red; font-size: 0.9em; margin-top: 10px; }
 
 /* CABEÇALHO GERAL */
-header { background: var(--primary); color: white; padding: 15px; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+header { 
+    background: var(--primary); 
+    color: white; 
+    padding: 15px; 
+    display: flex; 
+    align-items: center; 
+    gap: 15px; 
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2); 
+    flex-shrink: 0; /* Garante que o cabeçalho nunca encolha */
+    z-index: 10;
+}
 .btn-sair, .btn-voltar, .btn-lixeira { background: none; border: none; color: white; font-size: 1em; cursor: pointer; font-weight: bold; }
 .btn-voltar { font-size: 1.5em; margin-right: 5px; }
 .btn-lixeira { font-size: 1.2em; margin-left: auto; }
 
 /* TELA CONTATOS */
 #contactsScreen { background: #f0f2f5; }
-.container-lista { padding: 20px; }
+.container-lista { padding: 20px; overflow-y: auto; flex: 1; }
 .aviso-topo { margin-bottom: 15px; color: #555; font-size: 0.9em; }
 
 .contact-card {
@@ -59,10 +82,21 @@ header { background: var(--primary); color: white; padding: 15px; display: flex;
     background-size: 400px; 
 }
 
-main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
+/* MAIN (ONDE FICAM AS MENSAGENS) */
+main { 
+    flex: 1; /* Ocupa todo o espaço disponível entre Header e Footer */
+    overflow-y: auto; /* Permite rolagem apenas aqui dentro */
+    padding: 15px; 
+    display: flex; 
+    flex-direction: column; 
+    gap: 8px; 
+    
+    /* Garante rolagem suave no iOS */
+    -webkit-overflow-scrolling: touch; 
+}
 
 .message { 
-    max-width: 85%; /* Aumentei um pouco para caber o player de áudio */
+    max-width: 85%; 
     padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
     position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
     word-wrap: break-word; 
@@ -77,23 +111,25 @@ main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction
 
 .message img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 5px; }
 
-/* NOVO: Estilo do Player de Áudio */
-.message audio {
-    width: 200px;
-    height: 40px;
-    margin-top: 5px;
-}
+/* Player de Áudio */
+.message audio { width: 220px; height: 40px; margin-top: 5px; max-width: 100%; }
 
 /* RODAPÉ E BOTÕES */
-footer { background: #f0f0f0; padding: 10px; }
+footer { 
+    background: #f0f0f0; 
+    padding: 10px; 
+    flex-shrink: 0; /* Garante que o rodapé nunca suma */
+    
+    /* Proteção para iPhone X/11/12/13/14/15 (Notch e Home Bar) */
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
 footer form { display: flex; gap: 10px; align-items: center; }
 footer input[type=text] { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
-footer button[type=submit] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; }
+footer button[type=submit] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
-/* Botão de Anexo */
-.btn-anexo { font-size: 1.5em; cursor: pointer; padding: 0 10px; color: #555; }
-
-/* NOVO: Botão de Microfone */
+/* Ícones */
+.btn-anexo { font-size: 1.5em; cursor: pointer; padding: 0 10px; color: #555; display: flex; align-items: center; }
 .btn-mic {
     background: none; border: none; font-size: 1.5em; cursor: pointer; color: #555;
     transition: 0.2s;
@@ -101,12 +137,7 @@ footer button[type=submit] { background: var(--secondary); color: white; border:
     border-radius: 50%;
 }
 
-/* Estado Gravando (Vermelho Piscante) */
-.btn-mic.gravando {
-    color: white;
-    background-color: var(--record-red);
-    animation: pulsar 1.5s infinite;
-}
+.btn-mic.gravando { color: white; background-color: var(--record-red); animation: pulsar 1.5s infinite; }
 
 @keyframes pulsar {
     0% { transform: scale(1); }
