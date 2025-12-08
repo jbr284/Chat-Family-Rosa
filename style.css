@@ -6,9 +6,18 @@
     --other-bubble: #ffffff;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+* { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+}
 
-body { background-color: #d1d1d1; height: 100vh; overflow: hidden; }
+body { 
+    background-color: #d1d1d1; 
+    height: 100vh; 
+    overflow: hidden; /* Evita rolagem da página inteira, só do chat */
+}
 
 /* GERENCIADOR DE TELAS */
 .screen { display: none; height: 100vh; flex-direction: column; }
@@ -41,11 +50,20 @@ header { background: var(--primary); color: white; padding: 15px; display: flex;
 .contact-name { font-weight: bold; color: #333; font-size: 1.1em; }
 
 /* TELA CHAT */
-#chatScreen { background-color: var(--bg-chat); background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-repeat: repeat; background-size: 400px; }
+#chatScreen { 
+    background-color: var(--bg-chat); 
+    background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); 
+    background-repeat: repeat; 
+    background-size: 400px; 
+}
 
 main { flex: 1; overflow-y: scroll; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
 
-.message { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); word-wrap: break-word; }
+.message { 
+    max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 0.95em; 
+    position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); 
+    word-wrap: break-word; word-break: break-word; /* Garante que palavras longas quebrem linha */
+}
 .message.mine { align-self: flex-end; background-color: var(--my-bubble); border-top-right-radius: 0; }
 .message.theirs { align-self: flex-start; background-color: var(--other-bubble); border-top-left-radius: 0; }
 .msg-time { font-size: 0.7em; color: #999; float: right; margin-left: 10px; margin-top: 5px; }
