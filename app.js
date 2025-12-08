@@ -1,5 +1,8 @@
-// --- CONFIGURAÇÃO DO FIREBASE ---
-// 1. Cole suas chaves do Console do Firebase aqui dentro:
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+// --- CONFIGURAÇÃO ---
 const firebaseConfig = {
   apiKey: "AIzaSyAB3KCfomPt3TAtV9mL4lx393TaMhNA5tY",
   authDomain: "chat-family-rosa.firebaseapp.com",
@@ -10,235 +13,155 @@ const firebaseConfig = {
   appId: "1:237093132146:web:280b9c3a36f1bff6672feb"
 };
 
-// Inicializa Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-const storage = firebase.storage();
+// --- CADASTRO DA FAMÍLIA (Edite aqui!) ---
+// Isso serve para gerar a lista de contatos automaticamente
+const FAMILIA = [
+    { email: "joão@rosa.family", nome: "Pai 👨🏻", avatar: "👨🏻" },
+    { email: "noemi@rosa.family", nome: "Mãe 👩🏼", avatar: "👩🏼" },
+    { email: "lilica@rosa.family", nome: "Filha 👧🏻", avatar: "👧🏻" }
+];
 
-// --- VARIÁVEIS GLOBAIS ---
-let currentUser = null;
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-// Elementos do DOM
-const loginScreen = document.getElementById('login-screen');
-const chatScreen = document.getElementById('chat-screen');
-const btnLogin = document.getElementById('btn-login');
-const btnLogout = document.getElementById('btn-logout');
-const msgInput = document.getElementById('msg-input');
-const btnSend = document.getElementById('btn-send');
-const messagesList = document.getElementById('messages-list');
-const btnAttach = document.getElementById('btn-attach');
-const fileInput = document.getElementById('file-input');
-const btnMic = document.getElementById('btn-mic');
-const recordingIndicator = document.getElementById('recording-indicator');
+let usuarioAtual = null;
+let contatoAtual = null; // Com quem estou falando agora?
+let chatIdAtual = null;  // Qual a sala (ID)?
+let unsubscribe = null;  // Para parar de escutar o chat quando sair
 
-// --- 1. AUTENTICAÇÃO ---
-
-// Observer: Verifica se tem usuário logado
-auth.onAuthStateChanged((user) => {
+// 1. MONITOR DE LOGIN
+onAuthStateChanged(auth, (user) => {
     if (user) {
-        currentUser = user;
-        loginScreen.classList.add('hidden');
-        chatScreen.classList.remove('hidden');
-        document.getElementById('user-name').innerText = user.displayName;
-        carregarMensagens();
+        usuarioAtual = user;
+        mostrarTela('contactsScreen');
+        gerarListaDeContatos();
     } else {
-        currentUser = null;
-        loginScreen.classList.remove('hidden');
-        chatScreen.classList.add('hidden');
+        usuarioAtual = null;
+        mostrarTela('loginScreen');
     }
 });
 
-// Login com Google
-btnLogin.addEventListener('click', () => {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(error => alert("Erro no login: " + error.message));
-});
-
-// Logout
-btnLogout.addEventListener('click', () => auth.signOut());
-
-// --- 2. LÓGICA DE CHAT (TEXTO) ---
-
-// Mostrar/Ocultar botão de enviar texto dependendo se tem algo digitado
-msgInput.addEventListener('input', () => {
-    if (msgInput.value.trim() !== "") {
-        btnSend.style.display = "flex";
-        btnMic.style.display = "none";
-    } else {
-        btnSend.style.display = "none";
-        btnMic.style.display = "flex";
-    }
-});
-
-// Enviar Texto
-btnSend.addEventListener('click', enviarTexto);
-msgInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') enviarTexto();
-});
-
-function enviarTexto() {
-    const texto = msgInput.value.trim();
-    if (!texto) return;
-
-    db.collection('mensagens').add({
-        texto: texto,
-        tipo: 'texto',
-        uid: currentUser.uid,
-        nome: currentUser.displayName.split(' ')[0], // Primeiro nome
-        data: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    msgInput.value = "";
-    btnSend.style.display = "none";
-    btnMic.style.display = "flex";
+// 2. FUNÇÕES DE NAVEGAÇÃO
+window.mostrarTela = function(idTela) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(idTela).classList.add('active');
 }
 
-// --- 3. LÓGICA DE ARQUIVOS (FOTO) ---
+// 3. LÓGICA DE CONTATOS
+function gerarListaDeContatos() {
+    const lista = document.getElementById('listaContatos');
+    lista.innerHTML = ""; // Limpa
 
-btnAttach.addEventListener('click', () => fileInput.click());
+    // Filtra para não mostrar eu mesmo na lista
+    const contatosPossiveis = FAMILIA.filter(m => m.email !== usuarioAtual.email);
 
-fileInput.addEventListener('change', (e) => {
-    const arquivo = e.target.files[0];
-    if (!arquivo) return;
+    contatosPossiveis.forEach(membro => {
+        const div = document.createElement('div');
+        div.className = 'contact-card';
+        div.onclick = () => abrirConversa(membro);
+        div.innerHTML = `
+            <div class="avatar">${membro.avatar}</div>
+            <div class="contact-name">${membro.nome}</div>
+        `;
+        lista.appendChild(div);
+    });
+}
 
-    // Upload Imagem
-    const nomeArquivo = `imagens/${Date.now()}_${arquivo.name}`;
-    const ref = storage.ref(nomeArquivo);
+// 4. ABRIR CONVERSA (O Pulo do Gato 🐈)
+window.abrirConversa = function(membroDestino) {
+    contatoAtual = membroDestino;
+    
+    // GERA O ID DA SALA: Junta os dois emails em ordem alfabética
+    // Ex: "mae@..." e "pai@..." vira sempre "mae@..._pai@..."
+    const emails = [usuarioAtual.email, membroDestino.email].sort();
+    chatIdAtual = emails.join('_');
 
-    ref.put(arquivo).then(snapshot => {
-        snapshot.ref.getDownloadURL().then(url => {
-            db.collection('mensagens').add({
-                arquivoUrl: url,
-                tipo: 'imagem',
-                uid: currentUser.uid,
-                nome: currentUser.displayName.split(' ')[0],
-                data: firebase.firestore.FieldValue.serverTimestamp()
-            });
+    document.getElementById('chatTitle').innerText = membroDestino.nome;
+    mostrarTela('chatScreen');
+    
+    iniciarEscutaMensagens();
+}
+
+window.voltarParaContatos = function() {
+    if(unsubscribe) unsubscribe(); // Para de gastar internet escutando o chat
+    mostrarTela('contactsScreen');
+}
+
+// 5. CHAT EM TEMPO REAL
+function iniciarEscutaMensagens() {
+    const chatBox = document.getElementById('messagesList');
+    chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
+
+    // Busca apenas mensagens desta sala específica (chatIdAtual)
+    const q = query(
+        collection(db, "mensagens"), 
+        where("chatId", "==", chatIdAtual),
+        orderBy("data", "asc")
+    );
+
+    unsubscribe = onSnapshot(q, (snapshot) => {
+        chatBox.innerHTML = "";
+        
+        if(snapshot.empty) {
+            chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#888; font-size:0.9em">Nenhuma mensagem ainda.<br>Diga Oi! 👋</div>';
+            return;
+        }
+
+        snapshot.forEach((doc) => {
+            const msg = doc.data();
+            const div = document.createElement('div');
+            const souEu = msg.remetente === usuarioAtual.email;
+
+            div.className = `message ${souEu ? 'mine' : 'theirs'}`;
+            
+            // Hora
+            let hora = "";
+            if(msg.data) {
+                const d = msg.data.toDate();
+                hora = d.getHours().toString().padStart(2,'0') + ":" + d.getMinutes().toString().padStart(2,'0');
+            }
+
+            div.innerHTML = `${msg.texto} <span class="msg-time">${hora}</span>`;
+            chatBox.appendChild(div);
         });
-    }).catch(err => alert("Erro ao enviar imagem: " + err.message));
-});
 
-// --- 4. LÓGICA DE ÁUDIO (GRAVAÇÃO) ---
+        chatBox.scrollTop = chatBox.scrollHeight; // Rola pro final
+    });
+}
 
-btnMic.addEventListener('click', async () => {
-    if (!isRecording) {
-        iniciarGravacao();
-    } else {
-        pararGravacaoEEnviar();
-    }
-});
-
-async function iniciarGravacao() {
-    // Verifica suporte do navegador
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("Navegador não suporta gravação de áudio.");
-        return;
-    }
+// 6. ENVIAR
+window.enviarMensagem = async function(e) {
+    e.preventDefault();
+    const input = document.getElementById('msgInput');
+    const texto = input.value.trim();
+    if(!texto) return;
 
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-
-        mediaRecorder.ondataavailable = event => {
-            audioChunks.push(event.data);
-        };
-
-        mediaRecorder.start();
-        
-        // Atualiza UI
-        isRecording = true;
-        btnMic.classList.add('recording-active'); // Vermelho
-        btnMic.innerHTML = '<i class="material-icons">stop</i>'; // Ícone Stop
-        recordingIndicator.classList.remove('hidden'); // Mostra "Gravando..."
-
-    } catch (err) {
+        await addDoc(collection(db, "mensagens"), {
+            chatId: chatIdAtual, // Importante: Salva em qual sala foi
+            texto: texto,
+            remetente: usuarioAtual.email,
+            tipo: "texto",
+            data: serverTimestamp()
+        });
+        input.value = "";
+    } catch(err) {
         console.error(err);
-        alert("Permita o uso do microfone.");
     }
 }
 
-function pararGravacaoEEnviar() {
-    if (!mediaRecorder) return;
-    mediaRecorder.stop();
-
-    mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        
-        // UI volta ao normal
-        isRecording = false;
-        btnMic.classList.remove('recording-active');
-        btnMic.innerHTML = '<i class="material-icons">mic</i>';
-        recordingIndicator.classList.add('hidden');
-
-        // Enviar para o Firebase Storage
-        const nomeAudio = `audios/${Date.now()}.webm`;
-        const ref = storage.ref(nomeAudio);
-
-        ref.put(audioBlob).then(snapshot => {
-            snapshot.ref.getDownloadURL().then(url => {
-                db.collection('mensagens').add({
-                    arquivoUrl: url,
-                    tipo: 'audio',
-                    uid: currentUser.uid,
-                    nome: currentUser.displayName.split(' ')[0],
-                    data: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            });
-        }).catch(err => alert("Erro ao enviar áudio."));
-    };
+// 7. LOGIN / LOGOUT
+window.fazerLogin = function() {
+    const email = document.getElementById('emailInput').value;
+    const pass = document.getElementById('passInput').value;
+    const err = document.getElementById('loginError');
+    
+    signInWithEmailAndPassword(auth, email, pass).catch(e => {
+        err.innerText = "Erro: " + e.message;
+    });
 }
 
-// --- 5. RENDERIZAÇÃO (MOSTRAR MENSAGENS) ---
-
-function carregarMensagens() {
-    db.collection('mensagens')
-        .orderBy('data', 'asc')
-        .onSnapshot(snapshot => {
-            messagesList.innerHTML = ''; // Limpa tela
-            
-            snapshot.forEach(doc => {
-                const msg = doc.data();
-                const div = document.createElement('div');
-                const isMe = msg.uid === currentUser.uid;
-
-                div.className = `msg ${isMe ? 'sent' : 'received'}`;
-
-                // Formatar hora
-                let hora = '';
-                if (msg.data) {
-                    const date = msg.data.toDate();
-                    hora = date.getHours().toString().padStart(2,'0') + ':' + 
-                           date.getMinutes().toString().padStart(2,'0');
-                }
-
-                let conteudo = '';
-                if (msg.tipo === 'imagem') {
-                    conteudo = `<img src="${msg.arquivoUrl}" class="msg-img">`;
-                } else if (msg.tipo === 'audio') {
-                    conteudo = `
-                        <audio controls controlsList="nodownload">
-                            <source src="${msg.arquivoUrl}" type="audio/webm">
-                            Seu navegador não suporta áudio.
-                        </audio>`;
-                } else {
-                    conteudo = `<p>${msg.texto}</p>`;
-                }
-
-                div.innerHTML = `
-                    <span class="msg-author">${isMe ? 'Você' : msg.nome}</span>
-                    ${conteudo}
-                    <span class="msg-time">${hora}</span>
-                `;
-
-                messagesList.appendChild(div);
-            });
-
-            // Rola para o fim
-            messagesList.scrollTop = messagesList.scrollHeight;
-        });
+window.fazerLogout = function() {
+    signOut(auth);
 }
