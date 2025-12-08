@@ -44,6 +44,9 @@
 
         <footer>
             <form id="msgForm" onsubmit="enviarMensagem(event)">
+                <label for="fileInput" class="btn-anexo">📎</label>
+                <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="enviarArquivo(this)">
+
                 <input type="text" id="msgInput" placeholder="Mensagem..." autocomplete="off">
                 <button type="submit">➤</button>
             </form>
