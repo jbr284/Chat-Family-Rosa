@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-// NOVO: Importamos o Storage
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 
 // --- CONFIGURAÇÃO ---
@@ -15,7 +14,7 @@ const firebaseConfig = {
   appId: "1:237093132146:web:280b9c3a36f1bff6672feb"
 };
 
-// --- CADASTRO DA FAMÍLIA (COM OS EMAILS CORRETOS DO GMAIL) ---
+// --- CADASTRO DA FAMÍLIA ---
 const FAMILIA = [
     { 
         email: "jbrosa2009@gmail.com", 
@@ -37,7 +36,7 @@ const FAMILIA = [
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app); // Inicializa o Storage
+const storage = getStorage(app);
 
 let usuarioAtual = null;
 let contatoAtual = null;
@@ -66,7 +65,6 @@ window.mostrarTela = function(idTela) {
 function gerarListaDeContatos() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = "";
-
     const emailLogado = usuarioAtual.email.toLowerCase();
     const contatosPossiveis = FAMILIA.filter(m => m.email.toLowerCase() !== emailLogado);
 
@@ -87,8 +85,6 @@ window.abrirConversa = function(membroDestino) {
     contatoAtual = membroDestino;
     const meuEmail = usuarioAtual.email.toLowerCase();
     const emailDele = membroDestino.email.toLowerCase();
-    
-    // Ordena para garantir ID único
     const emails = [meuEmail, emailDele].sort();
     chatIdAtual = emails.join('_');
 
@@ -102,7 +98,7 @@ window.voltarParaContatos = function() {
     mostrarTela('contactsScreen');
 }
 
-// 5. CHAT EM TEMPO REAL (AGORA COM FOTOS 📸)
+// 5. CHAT EM TEMPO REAL
 function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
@@ -115,7 +111,6 @@ function iniciarEscutaMensagens() {
 
     unsubscribe = onSnapshot(q, (snapshot) => {
         chatBox.innerHTML = "";
-        
         if(snapshot.empty) {
             chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#888; font-size:0.9em">Nenhuma mensagem ainda.<br>Diga Oi! 👋</div>';
             return;
@@ -125,31 +120,25 @@ function iniciarEscutaMensagens() {
             const msg = doc.data();
             const div = document.createElement('div');
             const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
-
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
             
-            // Tratamento de Hora
             let hora = "...";
             if(msg.data) {
                 const d = msg.data.toDate();
                 hora = d.getHours().toString().padStart(2,'0') + ":" + d.getMinutes().toString().padStart(2,'0');
             }
 
-            // --- LÓGICA DE EXIBIÇÃO (TEXTO OU IMAGEM) ---
+            // Exibe Imagem ou Texto
             let conteudoHTML = "";
             if (msg.tipo === 'imagem') {
-                // Se for imagem, cria a tag IMG com o link do Storage
                 conteudoHTML = `<img src="${msg.texto}" alt="Foto enviada" loading="lazy">`;
             } else {
-                // Se for texto normal
                 conteudoHTML = msg.texto;
             }
 
             div.innerHTML = `${conteudoHTML} <span class="msg-time">${hora}</span>`;
             chatBox.appendChild(div);
         });
-
-        // Rola pro final suavemente
         chatBox.scrollTo({ left: 0, top: chatBox.scrollHeight, behavior: 'smooth' });
     });
 }
@@ -176,50 +165,49 @@ window.enviarMensagem = async function(e) {
     }
 }
 
-// 7. ENVIAR ARQUIVO (NOVO! 📸)
-window.enviarArquivo = async function(input) {
+// 7. ENVIAR ARQUIVO (Esta é a função que o botão vai chamar)
+async function enviarArquivo(evento) {
+    const input = evento.target; // Pega o input que foi clicado
     const arquivo = input.files[0];
     if (!arquivo) return;
 
-    // Feedback simples visual
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML += `<div style="text-align:center; font-size:0.8em; color:#666; margin:10px;">Enviando foto... ⌛</div>`;
     chatBox.scrollTop = chatBox.scrollHeight;
 
     try {
-        // 1. Criar referência única no Storage
         const nomeArquivo = Date.now() + "_" + arquivo.name;
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
 
-        // 2. Fazer Upload
         await uploadBytes(storageRef, arquivo);
-
-        // 3. Pegar Link
         const url = await getDownloadURL(storageRef);
 
-        // 4. Salvar no Banco
         await addDoc(collection(db, "mensagens"), {
             chatId: chatIdAtual,
-            texto: url,  // O texto vira o LINK
+            texto: url,
             remetente: usuarioAtual.email.toLowerCase(),
             tipo: "imagem", 
             data: serverTimestamp()
         });
-
     } catch (error) {
         console.error("Erro upload:", error);
-        alert("Erro ao enviar imagem. Verifique o console.");
+        alert("Erro ao enviar imagem.");
     }
-
-    input.value = ""; // Reseta o input
+    input.value = ""; 
 }
 
-// 8. LOGIN / LOGOUT
+// 8. ESCUTADOR DE EVENTOS (Onde a mágica da correção acontece 🪄)
+// Isso conecta o botão à função Javascript sem precisar do HTML
+const inputFile = document.getElementById('fileInput');
+if(inputFile) {
+    inputFile.addEventListener('change', enviarArquivo);
+}
+
+// 9. LOGIN / LOGOUT
 window.fazerLogin = function() {
     const email = document.getElementById('emailInput').value;
     const pass = document.getElementById('passInput').value;
     const err = document.getElementById('loginError');
-    
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => {
         err.innerText = "Erro: " + e.message;
     });
