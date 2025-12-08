@@ -13,8 +13,7 @@ const firebaseConfig = {
   appId: "1:237093132146:web:280b9c3a36f1bff6672feb"
 };
 
-// --- CADASTRO DA FAMÍLIA (Edite aqui!) ---
-// Isso serve para gerar a lista de contatos automaticamente
+// --- CADASTRO DA FAMÍLIA ---
 const FAMILIA = [
     { email: "joão@rosa.family", nome: "Pai 👨🏻", avatar: "👨🏻" },
     { email: "noemi@rosa.family", nome: "Mãe 👩🏼", avatar: "👩🏼" },
@@ -26,14 +25,15 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 let usuarioAtual = null;
-let contatoAtual = null; // Com quem estou falando agora?
-let chatIdAtual = null;  // Qual a sala (ID)?
-let unsubscribe = null;  // Para parar de escutar o chat quando sair
+let contatoAtual = null;
+let chatIdAtual = null;
+let unsubscribe = null;
 
 // 1. MONITOR DE LOGIN
 onAuthStateChanged(auth, (user) => {
     if (user) {
         usuarioAtual = user;
+        console.log("Logado como:", user.email);
         mostrarTela('contactsScreen');
         gerarListaDeContatos();
     } else {
@@ -51,10 +51,12 @@ window.mostrarTela = function(idTela) {
 // 3. LÓGICA DE CONTATOS
 function gerarListaDeContatos() {
     const lista = document.getElementById('listaContatos');
-    lista.innerHTML = ""; // Limpa
+    lista.innerHTML = "";
 
-    // Filtra para não mostrar eu mesmo na lista
-    const contatosPossiveis = FAMILIA.filter(m => m.email !== usuarioAtual.email);
+    // Normaliza para comparar emails sempre em minúsculo
+    const emailLogado = usuarioAtual.email.toLowerCase();
+
+    const contatosPossiveis = FAMILIA.filter(m => m.email.toLowerCase() !== emailLogado);
 
     contatosPossiveis.forEach(membro => {
         const div = document.createElement('div');
@@ -68,14 +70,20 @@ function gerarListaDeContatos() {
     });
 }
 
-// 4. ABRIR CONVERSA (O Pulo do Gato 🐈)
+// 4. ABRIR CONVERSA (CORRIGIDO PARA MINÚSCULAS 🛠️)
 window.abrirConversa = function(membroDestino) {
     contatoAtual = membroDestino;
     
-    // GERA O ID DA SALA: Junta os dois emails em ordem alfabética
-    // Ex: "mae@..." e "pai@..." vira sempre "mae@..._pai@..."
-    const emails = [usuarioAtual.email, membroDestino.email].sort();
+    // Transforma tudo em minúsculo para garantir que o ID seja igual para todos
+    const meuEmail = usuarioAtual.email.toLowerCase();
+    const emailDele = membroDestino.email.toLowerCase();
+
+    // Ordena alfabeticamente
+    const emails = [meuEmail, emailDele].sort();
+    
+    // Cria o ID único da sala
     chatIdAtual = emails.join('_');
+    console.log("Entrando no Chat ID:", chatIdAtual);
 
     document.getElementById('chatTitle').innerText = membroDestino.nome;
     mostrarTela('chatScreen');
@@ -84,7 +92,7 @@ window.abrirConversa = function(membroDestino) {
 }
 
 window.voltarParaContatos = function() {
-    if(unsubscribe) unsubscribe(); // Para de gastar internet escutando o chat
+    if(unsubscribe) unsubscribe();
     mostrarTela('contactsScreen');
 }
 
@@ -93,7 +101,6 @@ function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
 
-    // Busca apenas mensagens desta sala específica (chatIdAtual)
     const q = query(
         collection(db, "mensagens"), 
         where("chatId", "==", chatIdAtual),
@@ -111,12 +118,14 @@ function iniciarEscutaMensagens() {
         snapshot.forEach((doc) => {
             const msg = doc.data();
             const div = document.createElement('div');
-            const souEu = msg.remetente === usuarioAtual.email;
+            
+            // Compara emails em minúsculo para saber quem enviou
+            const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
 
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
             
-            // Hora
-            let hora = "";
+            // Tratamento de Hora (Evita erro se data for null no inicio)
+            let hora = "...";
             if(msg.data) {
                 const d = msg.data.toDate();
                 hora = d.getHours().toString().padStart(2,'0') + ":" + d.getMinutes().toString().padStart(2,'0');
@@ -126,7 +135,8 @@ function iniciarEscutaMensagens() {
             chatBox.appendChild(div);
         });
 
-        chatBox.scrollTop = chatBox.scrollHeight; // Rola pro final
+        // Rola pro final suavemente
+        chatBox.scrollTo({ left: 0, top: chatBox.scrollHeight, behavior: 'smooth' });
     });
 }
 
@@ -139,15 +149,16 @@ window.enviarMensagem = async function(e) {
 
     try {
         await addDoc(collection(db, "mensagens"), {
-            chatId: chatIdAtual, // Importante: Salva em qual sala foi
+            chatId: chatIdAtual,
             texto: texto,
-            remetente: usuarioAtual.email,
+            remetente: usuarioAtual.email.toLowerCase(), // Salva sempre em minúsculo
             tipo: "texto",
             data: serverTimestamp()
         });
         input.value = "";
+        input.focus(); // Mantém o teclado aberto/foco no input
     } catch(err) {
-        console.error(err);
+        console.error("Erro ao enviar:", err);
     }
 }
 
@@ -157,7 +168,8 @@ window.fazerLogin = function() {
     const pass = document.getElementById('passInput').value;
     const err = document.getElementById('loginError');
     
-    signInWithEmailAndPassword(auth, email, pass).catch(e => {
+    // Limpa espaços extras que o corretor do celular pode colocar
+    signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => {
         err.innerText = "Erro: " + e.message;
     });
 }
