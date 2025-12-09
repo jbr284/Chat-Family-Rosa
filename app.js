@@ -5,7 +5,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 
 // --- TÍTULO FLEXÍVEL DO APP 🏷️ ---
 // Mude aqui para mudar no app inteiro!
-const NOME_APP = "Zap da Família"; 
+const NOME_APP = "Chat Família Rosa"; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyAB3KCfomPt3TAtV9mL4lx393TaMhNA5tY",
@@ -369,3 +369,4 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
+
