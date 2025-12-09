@@ -2,10 +2,18 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebas
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, getDocs, writeBatch, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
+import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
-// --- TÍTULO FLEXÍVEL DO APP 🏷️ ---
-// Mude aqui para mudar no app inteiro!
-const NOME_APP = "Chat Família Rosa"; 
+// --- CONFIGURAÇÃO GERAL ---
+const NOME_APP = Chat Família Rosa
+; 
+
+// Link do seu "Carteiro" na Vercel (Já atualizado com o seu link!)
+const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
+
+// --- CHAVE PÚBLICA (VAPID) ---
+// ⚠️ IMPORTANTE: Pegue isso no Firebase Console > Config do Projeto > Cloud Messaging > Web Push
+const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyAB3KCfomPt3TAtV9mL4lx393TaMhNA5tY",
@@ -23,20 +31,19 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const messaging = getMessaging(app);
 
 let usuarioAtual = null;
-let perfilUsuarioAtual = null; // Guarda nome, foto, status do banco
+let perfilUsuarioAtual = null;
 let contatoAtual = null;
 let chatIdAtual = null;
 let unsubscribeChat = null; 
 let primeiroCarregamento = true;
+
 let mediaRecorder = null;
 let audioChunks = [];
 
-// Aplica o Nome do App
-document.title = NOME_APP;
-document.querySelectorAll('.app-title').forEach(el => el.innerText = NOME_APP);
-
+// Ajuste de altura Mobile
 function ajustarAlturaReal() {
     const vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -44,25 +51,27 @@ function ajustarAlturaReal() {
 ajustarAlturaReal();
 window.addEventListener('resize', ajustarAlturaReal);
 
-// 1. MONITOR DE LOGIN & PERFIL
+// Aplica o nome do App
+document.title = NOME_APP;
+const appTitles = document.querySelectorAll('.app-title');
+if(appTitles) appTitles.forEach(el => el.innerText = NOME_APP);
+
+// 1. MONITOR DE LOGIN
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioAtual = user;
-        // Verifica se o usuário já criou o perfil no banco
         const docRef = doc(db, "usuarios", user.email);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
-            // Perfil existe: Vai para contatos
             perfilUsuarioAtual = docSnap.data();
             mostrarTela('contactsScreen');
             carregarContatosDoBanco();
             verificarPermissaoNotificacao();
         } else {
-            // Perfil NÃO existe: Vai para criar perfil
             mostrarTela('profileScreen');
-            // Preenche o campo nome com algo padrão se der
-            document.getElementById('profileName').value = user.displayName || "";
+            const nomeInput = document.getElementById('profileName');
+            if(nomeInput) nomeInput.value = user.displayName || "";
         }
     } else {
         usuarioAtual = null;
@@ -71,24 +80,80 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 2. SALVAR PERFIL (NOVO 💾)
+// 2. SISTEMA DE NOTIFICAÇÕES REAIS (PUSH) 🔔
+window.solicitarPermissaoNotificacao = async function() {
+    if (!("Notification" in window)) {
+        alert("Navegador sem suporte.");
+        return;
+    }
+
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+            // Pega o endereço (Token) do celular
+            const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+            console.log("Token gerado:", token);
+
+            if (token && usuarioAtual) {
+                // Salva o token no perfil do usuário no banco
+                const userRef = doc(db, "usuarios", usuarioAtual.email);
+                await setDoc(userRef, { tokenFcm: token }, { merge: true });
+                
+                alert("Notificações ativadas! Agora você receberá avisos reais.");
+                document.getElementById('avisoNotificacao').style.display = 'none';
+            }
+        } else {
+            alert("Permissão negada. Verifique as configurações do site (Cadeado).");
+        }
+    } catch (error) {
+        console.error("Erro ao ativar notificação:", error);
+        alert("Erro ao ativar. Veja o console.");
+    }
+}
+
+function verificarPermissaoNotificacao() {
+    if ("Notification" in window && Notification.permission === "default") {
+        const aviso = document.getElementById('avisoNotificacao');
+        if(aviso) aviso.style.display = 'block';
+    } else {
+        const aviso = document.getElementById('avisoNotificacao');
+        if(aviso) aviso.style.display = 'none';
+    }
+}
+
+// Botão de ativar notificação
+const btnAviso = document.getElementById('avisoNotificacao');
+if(btnAviso) btnAviso.addEventListener('click', window.solicitarPermissaoNotificacao);
+
+// Função Auxiliar para Chamar o Carteiro (Backend)
+function chamarCarteiro(textoMensagem) {
+    if (contatoAtual && contatoAtual.tokenFcm) {
+        fetch(URL_BACKEND, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                token: contatoAtual.tokenFcm,
+                titulo: `Nova mensagem de ${perfilUsuarioAtual ? perfilUsuarioAtual.nome : 'Família'}`,
+                corpo: textoMensagem,
+                link: window.location.href
+            })
+        }).catch(e => console.error("Erro no envio push:", e));
+    }
+}
+
+// 3. SALVAR PERFIL
 window.salvarPerfil = async function() {
     const nome = document.getElementById('profileName').value.trim();
     const status = document.getElementById('profileStatus').value.trim();
     const btn = document.querySelector('.btn-save');
     
-    if(!nome) return alert("Por favor, digite seu nome.");
-
-    btn.innerText = "Salvando...";
-    btn.disabled = true;
+    if(!nome) return alert("Digite seu nome.");
+    btn.innerText = "Salvando..."; btn.disabled = true;
 
     try {
-        let fotoUrl = "https://cdn-icons-png.flaticon.com/512/847/847969.png"; // Padrão
-        
-        // Se já tinha foto antes, mantém
+        let fotoUrl = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
         if (perfilUsuarioAtual && perfilUsuarioAtual.foto) fotoUrl = perfilUsuarioAtual.foto;
 
-        // Se selecionou uma NOVA foto agora, faz upload
         const inputFoto = document.getElementById('profilePhotoInput');
         if (inputFoto.files[0]) {
             const arquivo = inputFoto.files[0];
@@ -104,34 +169,28 @@ window.salvarPerfil = async function() {
             email: usuarioAtual.email
         };
 
-        // Salva na coleção "usuarios" (usando o email como ID do documento)
+        // Mantém o token se já existir
+        if (perfilUsuarioAtual && perfilUsuarioAtual.tokenFcm) {
+            dadosPerfil.tokenFcm = perfilUsuarioAtual.tokenFcm;
+        }
+
         await setDoc(doc(db, "usuarios", usuarioAtual.email), dadosPerfil);
-        
         perfilUsuarioAtual = dadosPerfil;
-        alert("Perfil salvo com sucesso!");
+        alert("Perfil salvo!");
         mostrarTela('contactsScreen');
         carregarContatosDoBanco();
 
-    } catch (e) {
-        console.error("Erro ao salvar perfil:", e);
-        alert("Erro ao salvar. Tente novamente.");
-    } finally {
-        btn.innerText = "💾 Salvar Perfil";
-        btn.disabled = false;
-    }
+    } catch (e) { console.error(e); alert("Erro ao salvar."); } 
+    finally { btn.innerText = "💾 Salvar Perfil"; btn.disabled = false; }
 }
 
-// Preview da imagem ao selecionar
 window.previewImagemPerfil = function(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            document.getElementById('profilePreview').src = e.target.result;
-        }
+        reader.onload = function(e) { document.getElementById('profilePreview').src = e.target.result; }
         reader.readAsDataURL(input.files[0]);
     }
 }
-
 window.editarMeuPerfil = function() {
     if(perfilUsuarioAtual) {
         document.getElementById('profileName').value = perfilUsuarioAtual.nome;
@@ -141,51 +200,46 @@ window.editarMeuPerfil = function() {
     mostrarTela('profileScreen');
 }
 
-// 3. CARREGAR CONTATOS DO BANCO (Substitui FAMILIA)
+// 4. LISTA DE CONTATOS
 function carregarContatosDoBanco() {
     const lista = document.getElementById('listaContatos');
-    lista.innerHTML = '<div style="text-align:center; padding:20px;">Atualizando lista...</div>';
+    lista.innerHTML = '<div style="text-align:center; padding:20px;">Carregando...</div>';
     
-    // Pega todos os usuários cadastrados
     const q = query(collection(db, "usuarios"));
-    
     onSnapshot(q, (snapshot) => {
         lista.innerHTML = "";
         const emailLogado = usuarioAtual.email.toLowerCase();
 
         snapshot.forEach((doc) => {
             const user = doc.data();
-            // Não mostra eu mesmo na lista
             if (user.email.toLowerCase() === emailLogado) return;
 
             const div = document.createElement('div');
             div.className = 'contact-card';
             div.onclick = () => abrirConversa(user);
             
+            // ID seguro para o badge
+            const safeId = user.email.replace(/[^a-zA-Z0-9]/g, '');
+
             div.innerHTML = `
                 <img class="avatar" src="${user.foto}" alt="Avatar">
                 <div class="contact-info">
                     <div class="contact-name">${user.nome}</div>
                     <div class="contact-status">${user.status}</div>
                 </div>
-                <span id="badge-${user.email.replace(/[^a-zA-Z0-9]/g, '')}" class="badge">0</span>
+                <span id="badge-${safeId}" class="badge">0</span>
             `;
             lista.appendChild(div);
-
-            // Monitor de não lidas
-            monitorarNaoLidas(user);
+            monitorarNaoLidas(user, safeId);
         });
     });
 }
 
-function monitorarNaoLidas(userContato) {
+function monitorarNaoLidas(userContato, safeId) {
     const emailLogado = usuarioAtual.email.toLowerCase();
     const q = query(collection(db, "mensagens"), where("remetente", "==", userContato.email.toLowerCase()), where("destinatario", "==", emailLogado), where("lido", "==", false));
-    
     onSnapshot(q, (snapshot) => {
         const count = snapshot.size;
-        // ID seguro para o seletor HTML
-        const safeId = userContato.email.replace(/[^a-zA-Z0-9]/g, '');
         const badge = document.getElementById(`badge-${safeId}`);
         if (badge) {
             if (count > 0) {
@@ -198,33 +252,23 @@ function monitorarNaoLidas(userContato) {
     });
 }
 
-// 4. ABRIR CONVERSA
+// 5. CHAT
 window.abrirConversa = function(userDestino) {
     contatoAtual = userDestino;
     const emails = [usuarioAtual.email.toLowerCase(), userDestino.email.toLowerCase()].sort();
     chatIdAtual = emails.join('_');
 
     document.getElementById('chatTitle').innerText = userDestino.nome;
-    document.getElementById('chatStatus').innerText = userDestino.status;
-    document.getElementById('chatHeaderAvatar').src = userDestino.foto;
+    const st = document.getElementById('chatStatus');
+    if(st) st.innerText = userDestino.status;
+    const avatarImg = document.getElementById('chatHeaderAvatar');
+    if(avatarImg) avatarImg.src = userDestino.foto;
     
     mostrarTela('chatScreen');
     primeiroCarregamento = true;
     iniciarEscutaMensagens();
     marcarMensagensComoLidas(userDestino.email.toLowerCase(), usuarioAtual.email.toLowerCase());
 }
-
-// ... (Resto das funções de mensagem permanecem iguais, só atualizando referências)
-
-// --- FUNÇÕES AUXILIARES MANTIDAS (Notificação, Envio, etc) ---
-window.mostrarTela = function(idTela) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(idTela).classList.add('active');
-}
-
-// As funções enviarMensagem, enviarArquivo, alternarGravacao, etc...
-// continuam idênticas ao código anterior, pois a lógica de envio não mudou.
-// Apenas vou repetir aqui as essenciais para garantir que o arquivo esteja completo.
 
 async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     const q = query(collection(db, "mensagens"), where("remetente", "==", emailRemetente), where("destinatario", "==", emailDestinatario), where("lido", "==", false));
@@ -250,10 +294,7 @@ function iniciarEscutaMensagens() {
                 if (change.type === "added") {
                     const novaMsg = change.doc.data();
                     if (novaMsg.remetente.toLowerCase() !== usuarioAtual.email.toLowerCase()) {
-                        tocarAlerta();
-                        let corpoMsg = novaMsg.tipo === 'texto' ? novaMsg.texto : '📷 Mídia';
-                        // Busca nome no perfil salvo se possível, ou usa genérico
-                        dispararNotificacaoSistema(contatoAtual ? contatoAtual.nome : "Novo Zap", corpoMsg);
+                        tocarAlerta(); // Som local
                         marcarMensagensComoLidas(novaMsg.remetente, usuarioAtual.email.toLowerCase());
                     }
                 }
@@ -261,6 +302,7 @@ function iniciarEscutaMensagens() {
         }
         primeiroCarregamento = false;
         chatBox.innerHTML = "";
+        
         if(snapshot.empty) { chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">Nenhuma mensagem.<br>Diga Oi! 👋</div>'; return; }
 
         snapshot.forEach((docSnapshot) => {
@@ -268,6 +310,7 @@ function iniciarEscutaMensagens() {
             const div = document.createElement('div');
             const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
+            
             let statusIcon = "";
             if(souEu) statusIcon = msg.lido ? " <span style='color:#4fc3f7;'>✓✓</span>" : " <span style='color:#999;'>✓</span>";
             if (souEu) div.addEventListener('dblclick', async () => { if (confirm("Apagar?")) await deleteDoc(doc(db, "mensagens", docSnapshot.id)); });
@@ -284,44 +327,32 @@ function iniciarEscutaMensagens() {
     });
 }
 
-// Notificações
-function solicitarPermissaoNotificacao() {
-    if (!("Notification" in window)) return alert("Sem suporte.");
-    Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-            alert("Ativado!");
-            document.getElementById('avisoNotificacao').style.display = 'none';
-        }
-    });
-}
-function verificarPermissaoNotificacao() {
-    if ("Notification" in window && Notification.permission === "default") {
-        document.getElementById('avisoNotificacao').style.display = 'block';
-    } else {
-        document.getElementById('avisoNotificacao').style.display = 'none';
-    }
-}
-function dispararNotificacaoSistema(titulo, corpo) {
-    if (Notification.permission === "granted") {
-        try { new Notification(titulo, { body: corpo, icon: "https://cdn-icons-png.flaticon.com/512/1244/1244696.png" }); } catch (e) {}
-    }
-}
-const btnAviso = document.getElementById('avisoNotificacao');
-if(btnAviso) btnAviso.addEventListener('click', solicitarPermissaoNotificacao);
-
 function tocarAlerta() { somNotificacao.play().catch(e=>{}); }
 
-// Envios
+// 6. ENVIOS (COM CHAMADA AO CARTEIRO)
 window.enviarMensagem = async function(e) {
     e.preventDefault();
     const input = document.getElementById('msgInput');
     const texto = input.value.trim();
     if(!texto || !contatoAtual) return;
     try {
-        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "texto", data: serverTimestamp() });
+        await addDoc(collection(db, "mensagens"), { 
+            chatId: chatIdAtual, 
+            texto: texto, 
+            remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), 
+            lido: false, 
+            tipo: "texto", 
+            data: serverTimestamp() 
+        });
+        
+        // CHAMA O BACKEND
+        chamarCarteiro(texto);
+
         input.value = ""; input.focus();
     } catch(err) { console.error(err); }
 }
+
 async function enviarArquivo(evento) {
     const input = evento.target; const arquivo = input.files[0];
     if (!arquivo) return;
@@ -330,10 +361,23 @@ async function enviarArquivo(evento) {
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
         await uploadBytes(storageRef, arquivo);
         const url = await getDownloadURL(storageRef);
-        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "imagem", data: serverTimestamp() });
+        await addDoc(collection(db, "mensagens"), { 
+            chatId: chatIdAtual, 
+            texto: url, 
+            remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), 
+            lido: false, 
+            tipo: "imagem", 
+            data: serverTimestamp() 
+        });
+        
+        // CHAMA O BACKEND
+        chamarCarteiro("📷 Mídia enviada");
+
     } catch (e) {}
     input.value = "";
 }
+
 async function alternarGravacao() {
     const btnMic = document.getElementById('btnMic');
     if (!mediaRecorder || mediaRecorder.state === "inactive") {
@@ -348,14 +392,27 @@ async function alternarGravacao() {
                 const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
                 await uploadBytes(storageRef, audioBlob);
                 const url = await getDownloadURL(storageRef);
-                await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "audio", data: serverTimestamp() });
+                await addDoc(collection(db, "mensagens"), { 
+                    chatId: chatIdAtual, 
+                    texto: url, 
+                    remetente: usuarioAtual.email.toLowerCase(), 
+                    destinatario: contatoAtual.email.toLowerCase(), 
+                    lido: false, 
+                    tipo: "audio", 
+                    data: serverTimestamp() 
+                });
+                
+                // CHAMA O BACKEND
+                chamarCarteiro("🎤 Áudio enviado");
             };
             mediaRecorder.start(); btnMic.classList.add("gravando"); btnMic.innerText = "⏹️";
         } catch (e) { alert("Erro Mic"); }
     } else { mediaRecorder.stop(); btnMic.classList.remove("gravando"); btnMic.innerText = "🎤"; }
 }
+
 const inputFile = document.getElementById('fileInput'); if(inputFile) inputFile.addEventListener('change', enviarArquivo);
 const btnMic = document.getElementById('btnMic'); if(btnMic) btnMic.addEventListener('click', alternarGravacao);
+
 window.limparConversaInteira = async function() {
     if (!confirm("Apagar TUDO?")) return;
     const q = query(collection(db, "mensagens"), where("chatId", "==", chatIdAtual));
@@ -364,9 +421,14 @@ window.limparConversaInteira = async function() {
     snapshot.forEach((d) => batch.delete(d.ref));
     await batch.commit();
 }
+
+window.mostrarTela = function(idTela) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(idTela).classList.add('active');
+}
+
 window.fazerLogin = function() {
     const email = document.getElementById('emailInput').value; const pass = document.getElementById('passInput').value;
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
-
