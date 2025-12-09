@@ -1,0 +1,21 @@
+{
+  "name": "Zap da Família",
+  "short_name": "Zap Família",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#d1d1d1",
+  "theme_color": "#075e54",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1244/1244696.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1244/1244696.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
