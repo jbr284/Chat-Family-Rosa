@@ -1,4 +1,4 @@
-const CACHE_NAME = "zap-familia-v1";
+const CACHE_NAME = "zap-familia-v2";
 const urlsToCache = [
   "./",
   "./index.html",
@@ -38,4 +38,5 @@ self.addEventListener("fetch", (event) => {
       return response || fetch(event.request);
     })
   );
+
 });
