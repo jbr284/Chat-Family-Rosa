@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#075e54">
-    
-    <title>Zap da Família</title>
-    
-    <link rel="stylesheet" href="style.css">
+    <title>Carregando...</title> <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/1244/1244696.png">
 </head>
@@ -15,8 +12,7 @@
 
     <div id="loginScreen" class="screen active">
         <div class="login-box">
-            <h2>🏡 Zap da Família</h2>
-            <p>Identifique-se para entrar:</p>
+            <h2 class="app-title">Zap</h2> <p>Identifique-se para entrar:</p>
             <input type="email" id="emailInput" placeholder="Seu e-mail">
             <input type="password" id="passInput" placeholder="Sua senha">
             <button onclick="fazerLogin()">Entrar</button>
@@ -24,10 +20,33 @@
         </div>
     </div>
 
+    <div id="profileScreen" class="screen">
+        <header>
+            <h3>Criar/Editar Perfil</h3>
+        </header>
+        <div class="profile-container">
+            <div class="profile-photo-wrapper" onclick="document.getElementById('profilePhotoInput').click()">
+                <img id="profilePreview" src="https://cdn-icons-png.flaticon.com/512/847/847969.png" alt="Perfil">
+                <div class="edit-overlay">📷 Alterar</div>
+            </div>
+            <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;" onchange="previewImagemPerfil(this)">
+
+            <label>Seu Nome:</label>
+            <input type="text" id="profileName" placeholder="Ex: Pai" maxlength="20">
+
+            <label>Frase de Status:</label>
+            <input type="text" id="profileStatus" placeholder="Ex: Disponível" maxlength="50">
+
+            <button class="btn-save" onclick="salvarPerfil()">💾 Salvar Perfil</button>
+        </div>
+    </div>
+
     <div id="contactsScreen" class="screen">
         <header>
-            <h3>Meus Contatos</h3>
-            <button class="btn-sair" onclick="fazerLogout()">Sair</button>
+            <h3 class="app-title">Zap</h3> <div class="header-actions">
+                 <button class="btn-icon" onclick="editarMeuPerfil()">👤</button>
+                <button class="btn-sair" onclick="fazerLogout()">Sair</button>
+            </div>
         </header>
         
         <div id="avisoNotificacao" class="barra-aviso" style="display:none">
@@ -35,31 +54,32 @@
         </div>
 
         <div class="container-lista">
-            <p class="aviso-topo">Com quem você quer falar?</p>
+            <p class="aviso-topo">Contatos cadastrados:</p>
             <div id="listaContatos">
-                </div>
+                <div style="text-align:center; padding:20px; color:#666">Carregando contatos...</div>
+            </div>
         </div>
     </div>
 
     <div id="chatScreen" class="screen">
         <header>
             <button class="btn-voltar" onclick="voltarParaContatos()">⬅</button>
+            
+            <img id="chatHeaderAvatar" class="mini-avatar" src="">
+            
             <div class="header-info">
-                <h3 id="chatTitle">Nome do Contato</h3>
-            </div>
+                <h3 id="chatTitle">Nome</h3>
+                <small id="chatStatus">Status...</small> </div>
             <button class="btn-lixeira" onclick="limparConversaInteira()" title="Apagar tudo">🗑️</button>
         </header>
 
-        <main id="messagesList">
-            </main>
+        <main id="messagesList"></main>
 
         <footer>
             <form id="msgForm" onsubmit="enviarMensagem(event)">
                 <label for="fileInput" class="btn-anexo">📎</label>
                 <input type="file" id="fileInput" accept="image/*" style="display: none;">
-
                 <input type="text" id="msgInput" placeholder="Mensagem..." autocomplete="off">
-                
                 <button type="button" id="btnMic" class="btn-mic">🎤</button>
                 <button type="submit" id="btnEnviar">➤</button>
             </form>
@@ -67,14 +87,9 @@
     </div>
 
     <script type="module" src="app.js"></script>
-    
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(reg => console.log('App pronto para instalar!', reg))
-                    .catch(err => console.log('Falha no SW:', err));
-            });
+            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
         }
     </script>
 </body>
