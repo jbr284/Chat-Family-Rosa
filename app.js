@@ -13,7 +13,7 @@ const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
 
 // --- CHAVE PÚBLICA (VAPID) ---
 // ⚠️ IMPORTANTE: Pegue isso no Firebase Console > Config do Projeto > Cloud Messaging > Web Push
-const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
+const VAPID_KEY = BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyAB3KCfomPt3TAtV9mL4lx393TaMhNA5tY",
@@ -432,3 +432,4 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
+
