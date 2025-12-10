@@ -5,7 +5,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // --- CONFIGURAÇÃO GERAL ---
-const NOME_APP = "Zap da Família"; 
+const NOME_APP = "Chat Family Rosa"; 
 const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
 const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
 
@@ -484,3 +484,4 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
+
