@@ -93,10 +93,23 @@
         </footer>
     </div>
 
+    <div id="imagePreviewModal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Enviar esta foto?</h3>
+            <div class="preview-area">
+                <img id="imgPreviewToSend" src="" alt="Preview">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="cancelarEnvioFoto()">❌ Não</button>
+                <button class="btn-confirm" onclick="confirmarEnvioFoto()">✅ Enviar</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="app.js"></script>
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));
+            window.addEventListener('load', () => navigator.serviceWorker.register('./firebase-messaging-sw.js'));
         }
     </script>
 </body>
