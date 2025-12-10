@@ -5,12 +5,14 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // --- CONFIGURAÇÃO GERAL ---
+// IMPORTANTE: Mantenha as aspas " " em volta do nome!
 const NOME_APP = "Zap da Família"; 
 
 // ✅ SEU SERVIDOR BACKEND
 const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
 
 // ✅ SUA CHAVE PÚBLICA (VAPID)
+// IMPORTANTE: Mantenha as aspas " " em volta da chave!
 const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
 
 const firebaseConfig = {
