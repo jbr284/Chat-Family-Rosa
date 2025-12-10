@@ -38,8 +38,6 @@ let timeoutDigitando = null;
 let primeiroCarregamento = true;
 let mediaRecorder = null;
 let audioChunks = [];
-
-// Variável para guardar a foto enquanto espera confirmação
 let arquivoParaEnvio = null;
 
 function ajustarAlturaReal() {
@@ -55,6 +53,26 @@ setTimeout(() => {
     if(appTitles) appTitles.forEach(el => el.innerText = NOME_APP);
 }, 100);
 
+// --- NOVO: LIMPA NOTIFICAÇÕES DA BANDEJA 🧹 ---
+async function limparNotificacoesDoAndroid() {
+    if ('serviceWorker' in navigator) {
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let registration of registrations) {
+                const notifications = await registration.getNotifications();
+                notifications.forEach(notification => notification.close());
+            }
+        } catch (e) { console.log("Erro ao limpar notificações:", e); }
+    }
+}
+
+// Limpa notificações quando a janela volta a ter foco (usuário abriu o app)
+window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        limparNotificacoesDoAndroid();
+    }
+});
+
 // 1. MONITOR DE LOGIN & PRESENÇA
 onAuthStateChanged(auth, async (user) => {
     if (user) {
@@ -68,6 +86,7 @@ onAuthStateChanged(auth, async (user) => {
             carregarContatosDoBanco();
             verificarEAtualizarToken();
             iniciarPresenca();
+            limparNotificacoesDoAndroid(); // Limpa ao entrar
         } else {
             mostrarTela('profileScreen');
             const nomeInput = document.getElementById('profileName');
@@ -235,7 +254,12 @@ window.abrirConversa = function(userDestino) {
     document.getElementById('chatTitle').innerText = userDestino.nome;
     document.getElementById('chatStatus').innerText = "Carregando status...";
     document.getElementById('chatHeaderAvatar').src = userDestino.foto;
+    
     mostrarTela('chatScreen');
+    
+    // Limpa notificações assim que abre a conversa
+    limparNotificacoesDoAndroid();
+
     primeiroCarregamento = true;
     iniciarEscutaMensagens();
     marcarMensagensComoLidas(userDestino.email.toLowerCase(), usuarioAtual.email.toLowerCase());
@@ -355,71 +379,40 @@ window.enviarMensagem = async function(e) {
     } catch(err) { console.error(err); }
 }
 
-// --- LOGICA DO PREVIEW DE IMAGEM 🖼️ ---
-// Quando usuário seleciona Galeria
-async function enviarArquivoComum(evento) {
-    abrirModalPreview(evento.target.files[0]);
-    evento.target.value = ""; // Limpa input para poder selecionar o mesmo arquivo se quiser
-}
-// Quando usuário tira foto na Câmera
-async function enviarFotoCamera(evento) {
-    abrirModalPreview(evento.target.files[0]);
-    evento.target.value = ""; 
-}
+// PREVIEW E CONFIRMAÇÃO
+async function enviarArquivoComum(evento) { abrirModalPreview(evento.target.files[0]); evento.target.value = ""; }
+async function enviarFotoCamera(evento) { abrirModalPreview(evento.target.files[0]); evento.target.value = ""; }
 
 function abrirModalPreview(arquivo) {
     if (!arquivo) return;
-    
-    // Salva na variável global
     arquivoParaEnvio = arquivo;
-
-    // Mostra a imagem na tela
     const reader = new FileReader();
     reader.onload = function(e) {
         document.getElementById('imgPreviewToSend').src = e.target.result;
-        document.getElementById('imagePreviewModal').classList.add('active'); // Abre modal
+        document.getElementById('imagePreviewModal').classList.add('active');
     }
     reader.readAsDataURL(arquivo);
 }
-
 window.cancelarEnvioFoto = function() {
     arquivoParaEnvio = null;
-    document.getElementById('imagePreviewModal').classList.remove('active'); // Fecha modal
+    document.getElementById('imagePreviewModal').classList.remove('active');
 }
-
 window.confirmarEnvioFoto = async function() {
     if (!arquivoParaEnvio) return;
-    
     const btnConfirm = document.querySelector('.btn-confirm');
-    btnConfirm.innerText = "Enviando...";
-    btnConfirm.disabled = true;
-
+    btnConfirm.innerText = "Enviando..."; btnConfirm.disabled = true;
     try {
         const nomeArquivo = Date.now() + "_" + arquivoParaEnvio.name;
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
         await uploadBytes(storageRef, arquivoParaEnvio);
         const url = await getDownloadURL(storageRef);
-        
-        await addDoc(collection(db, "mensagens"), { 
-            chatId: chatIdAtual, 
-            texto: url, 
-            remetente: usuarioAtual.email.toLowerCase(), 
-            destinatario: contatoAtual.email.toLowerCase(), 
-            lido: false, 
-            tipo: "imagem", 
-            data: serverTimestamp() 
-        });
+        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "imagem", data: serverTimestamp() });
         chamarCarteiro("📷 Foto enviada");
-        
-    } catch (e) { 
-        console.error(e); 
-        alert("Erro ao enviar foto.");
-    } finally {
-        // Limpa tudo e fecha o modal
+    } catch (e) { console.error(e); alert("Erro ao enviar foto."); } 
+    finally {
         arquivoParaEnvio = null;
         document.getElementById('imagePreviewModal').classList.remove('active');
-        btnConfirm.innerText = "✅ Enviar";
-        btnConfirm.disabled = false;
+        btnConfirm.innerText = "✅ Enviar"; btnConfirm.disabled = false;
     }
 }
 
@@ -463,4 +456,3 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
-
