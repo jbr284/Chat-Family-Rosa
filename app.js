@@ -4,7 +4,7 @@ import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, se
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
-const NOME_APP = "Chat Family Rosa"; 
+const NOME_APP = "Zap da Família"; 
 const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
 const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
 
@@ -53,7 +53,6 @@ setTimeout(() => {
     if(appTitles) appTitles.forEach(el => el.innerText = NOME_APP);
 }, 100);
 
-// --- NOVO: LIMPA NOTIFICAÇÕES DA BANDEJA 🧹 ---
 async function limparNotificacoesDoAndroid() {
     if ('serviceWorker' in navigator) {
         try {
@@ -66,7 +65,6 @@ async function limparNotificacoesDoAndroid() {
     }
 }
 
-// Limpa notificações quando a janela volta a ter foco (usuário abriu o app)
 window.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
         limparNotificacoesDoAndroid();
@@ -86,7 +84,7 @@ onAuthStateChanged(auth, async (user) => {
             carregarContatosDoBanco();
             verificarEAtualizarToken();
             iniciarPresenca();
-            limparNotificacoesDoAndroid(); // Limpa ao entrar
+            limparNotificacoesDoAndroid(); 
         } else {
             mostrarTela('profileScreen');
             const nomeInput = document.getElementById('profileName');
@@ -95,6 +93,7 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         usuarioAtual = null;
         perfilUsuarioAtual = null;
+        // Só agora mostra o login (remove o carregamento)
         mostrarTela('loginScreen');
     }
 });
@@ -254,12 +253,8 @@ window.abrirConversa = function(userDestino) {
     document.getElementById('chatTitle').innerText = userDestino.nome;
     document.getElementById('chatStatus').innerText = "Carregando status...";
     document.getElementById('chatHeaderAvatar').src = userDestino.foto;
-    
     mostrarTela('chatScreen');
-    
-    // Limpa notificações assim que abre a conversa
     limparNotificacoesDoAndroid();
-
     primeiroCarregamento = true;
     iniciarEscutaMensagens();
     marcarMensagensComoLidas(userDestino.email.toLowerCase(), usuarioAtual.email.toLowerCase());
