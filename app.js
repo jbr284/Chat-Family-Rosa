@@ -5,15 +5,13 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // --- CONFIGURAÇÃO GERAL ---
-const NOME_APP = Chat Família Rosa
-; 
+const NOME_APP = "Zap da Família"; 
 
-// Link do seu "Carteiro" na Vercel (Já atualizado com o seu link!)
+// ✅ SEU SERVIDOR BACKEND
 const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
 
-// --- CHAVE PÚBLICA (VAPID) ---
-// ⚠️ IMPORTANTE: Pegue isso no Firebase Console > Config do Projeto > Cloud Messaging > Web Push
-const VAPID_KEY = BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA; 
+// ✅ SUA CHAVE PÚBLICA (VAPID)
+const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyAB3KCfomPt3TAtV9mL4lx393TaMhNA5tY",
@@ -53,8 +51,10 @@ window.addEventListener('resize', ajustarAlturaReal);
 
 // Aplica o nome do App
 document.title = NOME_APP;
-const appTitles = document.querySelectorAll('.app-title');
-if(appTitles) appTitles.forEach(el => el.innerText = NOME_APP);
+setTimeout(() => {
+    const appTitles = document.querySelectorAll('.app-title');
+    if(appTitles) appTitles.forEach(el => el.innerText = NOME_APP);
+}, 100);
 
 // 1. MONITOR DE LOGIN
 onAuthStateChanged(auth, async (user) => {
@@ -80,7 +80,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 2. SISTEMA DE NOTIFICAÇÕES REAIS (PUSH) 🔔
+// 2. SISTEMA DE NOTIFICAÇÕES REAIS (PUSH)
 window.solicitarPermissaoNotificacao = async function() {
     if (!("Notification" in window)) {
         alert("Navegador sem suporte.");
@@ -90,17 +90,16 @@ window.solicitarPermissaoNotificacao = async function() {
     try {
         const permission = await Notification.requestPermission();
         if (permission === "granted") {
-            // Pega o endereço (Token) do celular
             const token = await getToken(messaging, { vapidKey: VAPID_KEY });
             console.log("Token gerado:", token);
 
             if (token && usuarioAtual) {
-                // Salva o token no perfil do usuário no banco
                 const userRef = doc(db, "usuarios", usuarioAtual.email);
                 await setDoc(userRef, { tokenFcm: token }, { merge: true });
                 
                 alert("Notificações ativadas! Agora você receberá avisos reais.");
-                document.getElementById('avisoNotificacao').style.display = 'none';
+                const aviso = document.getElementById('avisoNotificacao');
+                if(aviso) aviso.style.display = 'none';
             }
         } else {
             alert("Permissão negada. Verifique as configurações do site (Cadeado).");
@@ -121,7 +120,6 @@ function verificarPermissaoNotificacao() {
     }
 }
 
-// Botão de ativar notificação
 const btnAviso = document.getElementById('avisoNotificacao');
 if(btnAviso) btnAviso.addEventListener('click', window.solicitarPermissaoNotificacao);
 
@@ -169,7 +167,6 @@ window.salvarPerfil = async function() {
             email: usuarioAtual.email
         };
 
-        // Mantém o token se já existir
         if (perfilUsuarioAtual && perfilUsuarioAtual.tokenFcm) {
             dadosPerfil.tokenFcm = perfilUsuarioAtual.tokenFcm;
         }
@@ -218,7 +215,6 @@ function carregarContatosDoBanco() {
             div.className = 'contact-card';
             div.onclick = () => abrirConversa(user);
             
-            // ID seguro para o badge
             const safeId = user.email.replace(/[^a-zA-Z0-9]/g, '');
 
             div.innerHTML = `
@@ -294,7 +290,7 @@ function iniciarEscutaMensagens() {
                 if (change.type === "added") {
                     const novaMsg = change.doc.data();
                     if (novaMsg.remetente.toLowerCase() !== usuarioAtual.email.toLowerCase()) {
-                        tocarAlerta(); // Som local
+                        tocarAlerta();
                         marcarMensagensComoLidas(novaMsg.remetente, usuarioAtual.email.toLowerCase());
                     }
                 }
@@ -329,7 +325,7 @@ function iniciarEscutaMensagens() {
 
 function tocarAlerta() { somNotificacao.play().catch(e=>{}); }
 
-// 6. ENVIOS (COM CHAMADA AO CARTEIRO)
+// 6. ENVIOS
 window.enviarMensagem = async function(e) {
     e.preventDefault();
     const input = document.getElementById('msgInput');
@@ -346,7 +342,6 @@ window.enviarMensagem = async function(e) {
             data: serverTimestamp() 
         });
         
-        // CHAMA O BACKEND
         chamarCarteiro(texto);
 
         input.value = ""; input.focus();
@@ -371,7 +366,6 @@ async function enviarArquivo(evento) {
             data: serverTimestamp() 
         });
         
-        // CHAMA O BACKEND
         chamarCarteiro("📷 Mídia enviada");
 
     } catch (e) {}
@@ -402,7 +396,6 @@ async function alternarGravacao() {
                     data: serverTimestamp() 
                 });
                 
-                // CHAMA O BACKEND
                 chamarCarteiro("🎤 Áudio enviado");
             };
             mediaRecorder.start(); btnMic.classList.add("gravando"); btnMic.innerText = "⏹️";
@@ -432,4 +425,3 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
-
