@@ -33,6 +33,7 @@ let chatIdAtual = null;
 let unsubscribeChat = null; 
 let unsubscribeStatus = null;
 let unsubscribeDigitando = null;
+let unsubscribeEntrega = null; // NOVO: Monitor de entrega
 let timeoutDigitando = null;
 
 let primeiroCarregamento = true;
@@ -61,7 +62,7 @@ async function limparNotificacoesDoAndroid() {
                 const notifications = await registration.getNotifications();
                 notifications.forEach(notification => notification.close());
             }
-        } catch (e) { console.log("Erro ao limpar notificações:", e); }
+        } catch (e) { console.log("Erro ao limpar:", e); }
     }
 }
 
@@ -71,7 +72,7 @@ window.addEventListener('visibilitychange', () => {
     }
 });
 
-// 1. MONITOR DE LOGIN & PRESENÇA
+// 1. MONITOR DE LOGIN & PRESENÇA (COM SPLASH SCREEN)
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioAtual = user;
@@ -84,7 +85,10 @@ onAuthStateChanged(auth, async (user) => {
             carregarContatosDoBanco();
             verificarEAtualizarToken();
             iniciarPresenca();
-            limparNotificacoesDoAndroid(); 
+            limparNotificacoesDoAndroid();
+            
+            // Inicia o monitor de entrega para marcar msgs como recebidas
+            monitorarEntregasParaMim(); 
         } else {
             mostrarTela('profileScreen');
             const nomeInput = document.getElementById('profileName');
@@ -93,10 +97,30 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         usuarioAtual = null;
         perfilUsuarioAtual = null;
-        // Só agora mostra o login (remove o carregamento)
+        // Agora sim mostra o login (remove o carregamento)
         mostrarTela('loginScreen');
     }
 });
+
+// --- LÓGICA DE ENTREGA (2 TICKS CINZA) ---
+function monitorarEntregasParaMim() {
+    const q = query(
+        collection(db, "mensagens"), 
+        where("destinatario", "==", usuarioAtual.email.toLowerCase()),
+        where("entregue", "==", false)
+    );
+
+    unsubscribeEntrega = onSnapshot(q, (snapshot) => {
+        if (!snapshot.empty) {
+            const batch = writeBatch(db);
+            snapshot.forEach((docSnap) => {
+                // Marca como entregue (O remetente vai ver os 2 ticks cinza)
+                batch.update(docSnap.ref, { entregue: true });
+            });
+            batch.commit().catch(e => console.log("Erro entrega:", e));
+        }
+    });
+}
 
 function iniciarPresenca() {
     const atualizarStatus = async () => {
@@ -128,9 +152,7 @@ window.solicitarPermissaoNotificacao = async function() {
             await salvarTokenNoBanco();
             alert("Notificações ativadas!");
             document.getElementById('avisoNotificacao').style.display = 'none';
-        } else {
-            alert("Permissão negada.");
-        }
+        } else { alert("Permissão negada."); }
     } catch (error) { console.error(error); }
 }
 async function salvarTokenNoBanco() {
@@ -315,7 +337,8 @@ async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     const q = query(collection(db, "mensagens"), where("remetente", "==", emailRemetente), where("destinatario", "==", emailDestinatario), where("lido", "==", false));
     const snapshot = await getDocs(q);
     const batch = writeBatch(db); 
-    snapshot.forEach(doc => batch.update(doc.ref, { lido: true }));
+    // Além de ler, também garante que está entregue
+    snapshot.forEach(doc => batch.update(doc.ref, { lido: true, entregue: true }));
     if (!snapshot.empty) await batch.commit();
 }
 window.voltarParaContatos = function() {
@@ -324,6 +347,8 @@ window.voltarParaContatos = function() {
     if(unsubscribeDigitando) unsubscribeDigitando();
     mostrarTela('contactsScreen');
 }
+
+// VISUAL DO CHAT (TICKS)
 function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
@@ -343,35 +368,81 @@ function iniciarEscutaMensagens() {
         primeiroCarregamento = false;
         chatBox.innerHTML = "";
         if(snapshot.empty) { chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">Nenhuma mensagem.<br>Diga Oi! 👋</div>'; return; }
+        
         snapshot.forEach((docSnapshot) => {
             const msg = docSnapshot.data();
             const div = document.createElement('div');
             const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
-            let statusIcon = "";
-            if(souEu) statusIcon = msg.lido ? " <span style='color:#4fc3f7;'>✓✓</span>" : " <span style='color:#999;'>✓</span>";
-            if (souEu) div.addEventListener('dblclick', async () => { if (confirm("Apagar?")) await deleteDoc(doc(db, "mensagens", docSnapshot.id)); });
+            
+            // Lógica dos Ticks
+            let statusHTML = "";
+            if(souEu) {
+                if (msg.lido) {
+                    statusHTML = "<span class='tick-status tick-lido'>✓✓</span>"; // 2 Azuis
+                } else if (msg.entregue) {
+                    statusHTML = "<span class='tick-status tick-entregue'>✓✓</span>"; // 2 Cinzas
+                } else {
+                    statusHTML = "<span class='tick-status tick-enviado'>✓</span>"; // 1 Cinza
+                }
+                
+                div.addEventListener('dblclick', async () => { if (confirm("Apagar?")) await deleteDoc(doc(db, "mensagens", docSnapshot.id)); });
+            }
+
             let hora = msg.data ? msg.data.toDate().getHours().toString().padStart(2,'0') + ":" + msg.data.toDate().getMinutes().toString().padStart(2,'0') : "...";
             let conteudoHTML = msg.texto;
             if (msg.tipo === 'imagem') conteudoHTML = `<img src="${msg.texto}" alt="Foto" loading="lazy">`;
             if (msg.tipo === 'audio') conteudoHTML = `<audio controls src="${msg.texto}"></audio>`;
-            div.innerHTML = `${conteudoHTML} <span class="msg-time">${hora}${statusIcon}</span>`;
+            
+            div.innerHTML = `${conteudoHTML} <span class="msg-time">${hora}${statusHTML}</span>`;
             chatBox.appendChild(div);
         });
         chatBox.scrollTo({ left: 0, top: chatBox.scrollHeight, behavior: 'smooth' });
     });
 }
 function tocarAlerta() { somNotificacao.play().catch(e=>{}); }
+
+// ENVIOS (Agora com entregue: false)
 window.enviarMensagem = async function(e) {
     e.preventDefault();
     const input = document.getElementById('msgInput');
     const texto = input.value.trim();
     if(!texto || !contatoAtual) return;
     try {
-        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "texto", data: serverTimestamp() });
+        await addDoc(collection(db, "mensagens"), { 
+            chatId: chatIdAtual, 
+            texto: texto, 
+            remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), 
+            lido: false, 
+            entregue: false, // NOVO CAMPO
+            tipo: "texto", 
+            data: serverTimestamp() 
+        });
         chamarCarteiro(texto);
         input.value = ""; input.focus();
     } catch(err) { console.error(err); }
+}
+
+async function processarEnvioArquivo(arquivo) {
+    if (!arquivo) return;
+    try {
+        const nomeArquivo = Date.now() + "_" + arquivo.name;
+        const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
+        await uploadBytes(storageRef, arquivo);
+        const url = await getDownloadURL(storageRef);
+        await addDoc(collection(db, "mensagens"), { 
+            chatId: chatIdAtual, 
+            texto: url, 
+            remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), 
+            lido: false, 
+            entregue: false, // NOVO CAMPO
+            tipo: "imagem", 
+            data: serverTimestamp() 
+        });
+        chamarCarteiro("📷 Foto enviada");
+    } catch (e) { console.error(e); }
 }
 
 // PREVIEW E CONFIRMAÇÃO
@@ -396,19 +467,10 @@ window.confirmarEnvioFoto = async function() {
     if (!arquivoParaEnvio) return;
     const btnConfirm = document.querySelector('.btn-confirm');
     btnConfirm.innerText = "Enviando..."; btnConfirm.disabled = true;
-    try {
-        const nomeArquivo = Date.now() + "_" + arquivoParaEnvio.name;
-        const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
-        await uploadBytes(storageRef, arquivoParaEnvio);
-        const url = await getDownloadURL(storageRef);
-        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "imagem", data: serverTimestamp() });
-        chamarCarteiro("📷 Foto enviada");
-    } catch (e) { console.error(e); alert("Erro ao enviar foto."); } 
-    finally {
-        arquivoParaEnvio = null;
-        document.getElementById('imagePreviewModal').classList.remove('active');
-        btnConfirm.innerText = "✅ Enviar"; btnConfirm.disabled = false;
-    }
+    await processarEnvioArquivo(arquivoParaEnvio);
+    arquivoParaEnvio = null;
+    document.getElementById('imagePreviewModal').classList.remove('active');
+    btnConfirm.innerText = "✅ Enviar"; btnConfirm.disabled = false;
 }
 
 async function alternarGravacao() {
@@ -425,7 +487,7 @@ async function alternarGravacao() {
                 const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
                 await uploadBytes(storageRef, audioBlob);
                 const url = await getDownloadURL(storageRef);
-                await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "audio", data: serverTimestamp() });
+                await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "audio", data: serverTimestamp() });
                 chamarCarteiro("🎤 Áudio enviado");
             };
             mediaRecorder.start(); btnMic.classList.add("gravando"); btnMic.innerText = "⏹️";
