@@ -33,6 +33,7 @@ let contatoAtual = null;
 let chatIdAtual = null;
 let unsubscribeChat = null; 
 let primeiroCarregamento = true;
+
 let mediaRecorder = null;
 let audioChunks = [];
 
@@ -61,9 +62,7 @@ onAuthStateChanged(auth, async (user) => {
             perfilUsuarioAtual = docSnap.data();
             mostrarTela('contactsScreen');
             carregarContatosDoBanco();
-            
-            // Tenta salvar o token automaticamente se já estiver permitido
-            verificarEAtualizarToken(); 
+            verificarEAtualizarToken(); // Tenta salvar token automaticamente
         } else {
             mostrarTela('profileScreen');
             const nomeInput = document.getElementById('profileName');
@@ -80,22 +79,18 @@ onAuthStateChanged(auth, async (user) => {
 async function verificarEAtualizarToken() {
     if (!("Notification" in window)) return;
 
-    // Se já foi permitido antes, pega o token direto e salva (sem perguntar nada)
     if (Notification.permission === "granted") {
         document.getElementById('avisoNotificacao').style.display = 'none';
         await salvarTokenNoBanco();
     } 
-    // Se ainda não decidiu, mostra o botão amarelo
     else if (Notification.permission === "default") {
         document.getElementById('avisoNotificacao').style.display = 'block';
     } 
-    // Se bloqueado, esconde
     else {
         document.getElementById('avisoNotificacao').style.display = 'none';
     }
 }
 
-// Função que pede permissão (Botão Amarelo)
 window.solicitarPermissaoNotificacao = async function() {
     try {
         const permission = await Notification.requestPermission();
@@ -111,17 +106,26 @@ window.solicitarPermissaoNotificacao = async function() {
     }
 }
 
-// Função separada que faz o trabalho sujo de pegar o token
+// 🔥 AQUI ESTAVA O PROBLEMA DO 404 - CORRIGIDO AGORA 🔥
 async function salvarTokenNoBanco() {
     try {
-        const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+        // Registramos manualmente apontando para o arquivo na PASTA ATUAL (./)
+        // Isso resolve o problema dele procurar na raiz do domínio
+        const swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+        
+        // Agora passamos esse registro para o Firebase
+        const token = await getToken(messaging, { 
+            vapidKey: VAPID_KEY,
+            serviceWorkerRegistration: swRegistration
+        });
+
         if (token && usuarioAtual) {
-            console.log("Token salvo/atualizado:", token);
+            console.log("Token Salvo com Sucesso:", token);
             const userRef = doc(db, "usuarios", usuarioAtual.email);
             await setDoc(userRef, { tokenFcm: token }, { merge: true });
         }
     } catch (err) {
-        console.log("Erro ao obter token (pode ser falta de foco na aba):", err);
+        console.log("Erro ao obter token:", err);
     }
 }
 
@@ -171,7 +175,7 @@ window.salvarPerfil = async function() {
             foto: fotoUrl,
             email: usuarioAtual.email
         };
-        // Preserva o token se existir
+        
         if (perfilUsuarioAtual && perfilUsuarioAtual.tokenFcm) {
             dadosPerfil.tokenFcm = perfilUsuarioAtual.tokenFcm;
         }
