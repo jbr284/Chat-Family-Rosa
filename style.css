@@ -15,21 +15,15 @@ html, body { height: 100vh; height: calc(var(--vh, 1vh) * 100); width: 100%; ove
 .screen { display: none; }
 .screen.active { display: flex; flex-direction: column; height: 100%; width: 100%; }
 
-header { 
-    flex: 0 0 auto; background: var(--primary); color: white; padding: 10px 15px; 
-    display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 10;
-}
+header { flex: 0 0 auto; background: var(--primary); color: white; padding: 10px 15px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 10; }
 .header-actions { margin-left: auto; display: flex; gap: 15px; }
 .header-info { display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
 #chatTitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* Status no Cabeçalho */
 #chatStatus { font-size: 0.8em; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status-online { color: #8affaa; font-weight: bold; }
 .status-digitando { color: #8affaa; font-style: italic; animation: piscar 1s infinite; }
 @keyframes piscar { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 
-/* Perfis */
 .profile-container { flex: 1; padding: 20px; display: flex; flex-direction: column; align-items: center; background: #f0f2f5; overflow-y: auto; }
 .profile-photo-wrapper { width: 120px; height: 120px; border-radius: 50%; overflow: hidden; margin-bottom: 20px; position: relative; border: 4px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; }
 #profilePreview { width: 100%; height: 100%; object-fit: cover; }
@@ -38,10 +32,8 @@ header {
 .profile-container input[type=text] { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; outline: none; }
 .btn-save { margin-top: 30px; width: 100%; padding: 15px; background: var(--secondary); color: white; border: none; border-radius: 8px; font-size: 1.1em; font-weight: bold; cursor: pointer; }
 
-/* Avisos */
 .barra-aviso { background-color: #fff3cd; color: #856404; padding: 15px; text-align: center; font-size: 0.9em; cursor: pointer; border-bottom: 1px solid #ffeeba; font-weight: bold; }
 
-/* Chat e Mensagens */
 main { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 20px; display: flex; flex-direction: column; gap: 8px; background-color: var(--bg-chat); background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-repeat: repeat; background-size: 400px; -webkit-overflow-scrolling: touch; }
 footer { flex: 0 0 auto; background: #f0f0f0; padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
 
@@ -52,13 +44,12 @@ footer { flex: 0 0 auto; background: #f0f0f0; padding: 10px; padding-bottom: cal
 .message img { max-width: 100%; border-radius: 8px; display: block; margin-bottom: 5px; }
 .message audio { width: 220px; height: 40px; margin-top: 5px; max-width: 100%; }
 
-/* Rodapé e Botões */
 footer form { display: flex; gap: 8px; align-items: center; width: 100%; }
 footer input[type=text] { flex: 1; padding: 12px; border-radius: 20px; border: none; outline: none; }
 footer button[type=submit] { background: var(--secondary); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
 .btn-anexo, .btn-camera { font-size: 1.5em; cursor: pointer; padding: 0 5px; color: #555; display: flex; align-items: center; }
-.btn-camera { font-size: 1.4em; } /* Ajuste visual da câmera */
+.btn-camera { font-size: 1.4em; } 
 
 .btn-mic { background: none; border: none; font-size: 1.5em; cursor: pointer; color: #555; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; }
 .btn-mic.gravando { color: white; background-color: var(--record-red); animation: pulsar 1.5s infinite; }
@@ -69,7 +60,6 @@ footer button[type=submit] { background: var(--secondary); color: white; border:
 .btn-lixeira { margin-left: auto; }
 .btn-icon { width: 40px; }
 
-/* Cards de Contato */
 .contact-card { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; cursor: pointer; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
 .avatar { width: 50px; height: 50px; border-radius: 50%; margin-right: 15px; object-fit: cover; background: #ddd; }
 .mini-avatar { width: 35px; height: 35px; border-radius: 50%; margin-right: 10px; object-fit: cover; background: white; }
@@ -79,7 +69,18 @@ footer button[type=submit] { background: var(--secondary); color: white; border:
 .badge { position: absolute; top: 15px; right: 15px; background-color: #25D366; color: white; font-size: 0.75em; font-weight: bold; padding: 4px 8px; border-radius: 50%; min-width: 20px; text-align: center; display: none; }
 .badge.visible { display: block; animation: pop 0.3s; }
 
-/* Login */
+/* MODAL DE PREVIEW */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; padding: 20px; }
+.modal-overlay.active { display: flex; animation: fadeIn 0.3s; }
+.modal-content { background: white; padding: 20px; border-radius: 15px; width: 100%; max-width: 400px; text-align: center; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+.preview-area { width: 100%; max-height: 60vh; overflow: hidden; border-radius: 10px; background: #eee; display: flex; align-items: center; justify-content: center; }
+#imgPreviewToSend { max-width: 100%; max-height: 100%; object-fit: contain; }
+.modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+.btn-cancel, .btn-confirm { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 1em; cursor: pointer; }
+.btn-cancel { background: #e74c3c; color: white; }
+.btn-confirm { background: var(--secondary); color: white; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
 #loginScreen.active { justify-content: center; align-items: center; background: var(--secondary); }
 .login-box { background: white; padding: 30px; border-radius: 10px; width: 90%; max-width: 350px; text-align: center; }
 .login-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; }
