@@ -5,14 +5,8 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
 // --- CONFIGURAÇÃO GERAL ---
-// IMPORTANTE: Mantenha as aspas " " em volta do nome!
 const NOME_APP = "Zap da Família"; 
-
-// ✅ SEU SERVIDOR BACKEND
 const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
-
-// ✅ SUA CHAVE PÚBLICA (VAPID)
-// IMPORTANTE: Mantenha as aspas " " em volta da chave!
 const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
 
 const firebaseConfig = {
@@ -39,11 +33,10 @@ let contatoAtual = null;
 let chatIdAtual = null;
 let unsubscribeChat = null; 
 let primeiroCarregamento = true;
-
 let mediaRecorder = null;
 let audioChunks = [];
 
-// Ajuste de altura Mobile
+// Ajuste Mobile
 function ajustarAlturaReal() {
     const vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', `${vh}px`);
@@ -51,7 +44,6 @@ function ajustarAlturaReal() {
 ajustarAlturaReal();
 window.addEventListener('resize', ajustarAlturaReal);
 
-// Aplica o nome do App
 document.title = NOME_APP;
 setTimeout(() => {
     const appTitles = document.querySelectorAll('.app-title');
@@ -69,7 +61,9 @@ onAuthStateChanged(auth, async (user) => {
             perfilUsuarioAtual = docSnap.data();
             mostrarTela('contactsScreen');
             carregarContatosDoBanco();
-            verificarPermissaoNotificacao();
+            
+            // Tenta salvar o token automaticamente se já estiver permitido
+            verificarEAtualizarToken(); 
         } else {
             mostrarTela('profileScreen');
             const nomeInput = document.getElementById('profileName');
@@ -82,50 +76,59 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// 2. SISTEMA DE NOTIFICAÇÕES REAIS (PUSH)
-window.solicitarPermissaoNotificacao = async function() {
-    if (!("Notification" in window)) {
-        alert("Navegador sem suporte.");
-        return;
-    }
+// 2. SISTEMA INTELIGENTE DE TOKEN 🧠
+async function verificarEAtualizarToken() {
+    if (!("Notification" in window)) return;
 
-    try {
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-            const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-            console.log("Token gerado:", token);
-
-            if (token && usuarioAtual) {
-                const userRef = doc(db, "usuarios", usuarioAtual.email);
-                await setDoc(userRef, { tokenFcm: token }, { merge: true });
-                
-                alert("Notificações ativadas! Agora você receberá avisos reais.");
-                const aviso = document.getElementById('avisoNotificacao');
-                if(aviso) aviso.style.display = 'none';
-            }
-        } else {
-            alert("Permissão negada. Verifique as configurações do site (Cadeado).");
-        }
-    } catch (error) {
-        console.error("Erro ao ativar notificação:", error);
-        alert("Erro ao ativar. Veja o console.");
+    // Se já foi permitido antes, pega o token direto e salva (sem perguntar nada)
+    if (Notification.permission === "granted") {
+        document.getElementById('avisoNotificacao').style.display = 'none';
+        await salvarTokenNoBanco();
+    } 
+    // Se ainda não decidiu, mostra o botão amarelo
+    else if (Notification.permission === "default") {
+        document.getElementById('avisoNotificacao').style.display = 'block';
+    } 
+    // Se bloqueado, esconde
+    else {
+        document.getElementById('avisoNotificacao').style.display = 'none';
     }
 }
 
-function verificarPermissaoNotificacao() {
-    if ("Notification" in window && Notification.permission === "default") {
-        const aviso = document.getElementById('avisoNotificacao');
-        if(aviso) aviso.style.display = 'block';
-    } else {
-        const aviso = document.getElementById('avisoNotificacao');
-        if(aviso) aviso.style.display = 'none';
+// Função que pede permissão (Botão Amarelo)
+window.solicitarPermissaoNotificacao = async function() {
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+            await salvarTokenNoBanco();
+            alert("Notificações ativadas!");
+            document.getElementById('avisoNotificacao').style.display = 'none';
+        } else {
+            alert("Permissão negada.");
+        }
+    } catch (error) {
+        console.error("Erro permissão:", error);
+    }
+}
+
+// Função separada que faz o trabalho sujo de pegar o token
+async function salvarTokenNoBanco() {
+    try {
+        const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+        if (token && usuarioAtual) {
+            console.log("Token salvo/atualizado:", token);
+            const userRef = doc(db, "usuarios", usuarioAtual.email);
+            await setDoc(userRef, { tokenFcm: token }, { merge: true });
+        }
+    } catch (err) {
+        console.log("Erro ao obter token (pode ser falta de foco na aba):", err);
     }
 }
 
 const btnAviso = document.getElementById('avisoNotificacao');
 if(btnAviso) btnAviso.addEventListener('click', window.solicitarPermissaoNotificacao);
 
-// Função Auxiliar para Chamar o Carteiro (Backend)
+// Função Backend
 function chamarCarteiro(textoMensagem) {
     if (contatoAtual && contatoAtual.tokenFcm) {
         fetch(URL_BACKEND, {
@@ -137,11 +140,11 @@ function chamarCarteiro(textoMensagem) {
                 corpo: textoMensagem,
                 link: window.location.href
             })
-        }).catch(e => console.error("Erro no envio push:", e));
+        }).catch(e => console.error("Erro push:", e));
     }
 }
 
-// 3. SALVAR PERFIL
+// 3. PERFIL
 window.salvarPerfil = async function() {
     const nome = document.getElementById('profileName').value.trim();
     const status = document.getElementById('profileStatus').value.trim();
@@ -168,7 +171,7 @@ window.salvarPerfil = async function() {
             foto: fotoUrl,
             email: usuarioAtual.email
         };
-
+        // Preserva o token se existir
         if (perfilUsuarioAtual && perfilUsuarioAtual.tokenFcm) {
             dadosPerfil.tokenFcm = perfilUsuarioAtual.tokenFcm;
         }
@@ -178,7 +181,6 @@ window.salvarPerfil = async function() {
         alert("Perfil salvo!");
         mostrarTela('contactsScreen');
         carregarContatosDoBanco();
-
     } catch (e) { console.error(e); alert("Erro ao salvar."); } 
     finally { btn.innerText = "💾 Salvar Perfil"; btn.disabled = false; }
 }
@@ -199,7 +201,7 @@ window.editarMeuPerfil = function() {
     mostrarTela('profileScreen');
 }
 
-// 4. LISTA DE CONTATOS
+// 4. CONTATOS
 function carregarContatosDoBanco() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = '<div style="text-align:center; padding:20px;">Carregando...</div>';
@@ -327,25 +329,15 @@ function iniciarEscutaMensagens() {
 
 function tocarAlerta() { somNotificacao.play().catch(e=>{}); }
 
-// 6. ENVIOS
+// ENVIOS
 window.enviarMensagem = async function(e) {
     e.preventDefault();
     const input = document.getElementById('msgInput');
     const texto = input.value.trim();
     if(!texto || !contatoAtual) return;
     try {
-        await addDoc(collection(db, "mensagens"), { 
-            chatId: chatIdAtual, 
-            texto: texto, 
-            remetente: usuarioAtual.email.toLowerCase(), 
-            destinatario: contatoAtual.email.toLowerCase(), 
-            lido: false, 
-            tipo: "texto", 
-            data: serverTimestamp() 
-        });
-        
+        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "texto", data: serverTimestamp() });
         chamarCarteiro(texto);
-
         input.value = ""; input.focus();
     } catch(err) { console.error(err); }
 }
@@ -358,18 +350,8 @@ async function enviarArquivo(evento) {
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
         await uploadBytes(storageRef, arquivo);
         const url = await getDownloadURL(storageRef);
-        await addDoc(collection(db, "mensagens"), { 
-            chatId: chatIdAtual, 
-            texto: url, 
-            remetente: usuarioAtual.email.toLowerCase(), 
-            destinatario: contatoAtual.email.toLowerCase(), 
-            lido: false, 
-            tipo: "imagem", 
-            data: serverTimestamp() 
-        });
-        
+        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "imagem", data: serverTimestamp() });
         chamarCarteiro("📷 Mídia enviada");
-
     } catch (e) {}
     input.value = "";
 }
@@ -388,16 +370,7 @@ async function alternarGravacao() {
                 const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
                 await uploadBytes(storageRef, audioBlob);
                 const url = await getDownloadURL(storageRef);
-                await addDoc(collection(db, "mensagens"), { 
-                    chatId: chatIdAtual, 
-                    texto: url, 
-                    remetente: usuarioAtual.email.toLowerCase(), 
-                    destinatario: contatoAtual.email.toLowerCase(), 
-                    lido: false, 
-                    tipo: "audio", 
-                    data: serverTimestamp() 
-                });
-                
+                await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "audio", data: serverTimestamp() });
                 chamarCarteiro("🎤 Áudio enviado");
             };
             mediaRecorder.start(); btnMic.classList.add("gravando"); btnMic.innerText = "⏹️";
@@ -416,12 +389,7 @@ window.limparConversaInteira = async function() {
     snapshot.forEach((d) => batch.delete(d.ref));
     await batch.commit();
 }
-
-window.mostrarTela = function(idTela) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(idTela).classList.add('active');
-}
-
+window.mostrarTela = function(idTela) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById(idTela).classList.add('active'); }
 window.fazerLogin = function() {
     const email = document.getElementById('emailInput').value; const pass = document.getElementById('passInput').value;
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
