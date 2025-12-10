@@ -4,8 +4,7 @@ import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, se
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
-// --- CONFIGURAÇÃO GERAL ---
-const NOME_APP = "Chat Family Rosa"; 
+const NOME_APP = "Zap da Família"; 
 const URL_BACKEND = "https://notificacoes-chat-family.vercel.app/api/notificar";
 const VAPID_KEY = "BLuIEsTyT5C-eJppJhiLWE8_5roTQ0MxU6awA--kc6C9SBctxgxrXS3DcFJOYahrUpAaATMJnp6re1iJd7qp4jA"; 
 
@@ -32,13 +31,16 @@ let perfilUsuarioAtual = null;
 let contatoAtual = null;
 let chatIdAtual = null;
 let unsubscribeChat = null; 
-let unsubscribeStatus = null; // Monitorar status online do contato
-let unsubscribeDigitando = null; // Monitorar se contato está digitando
-let timeoutDigitando = null; // Timer para parar o "digitando"
+let unsubscribeStatus = null;
+let unsubscribeDigitando = null;
+let timeoutDigitando = null;
 
 let primeiroCarregamento = true;
 let mediaRecorder = null;
 let audioChunks = [];
+
+// Variável para guardar a foto enquanto espera confirmação
+let arquivoParaEnvio = null;
 
 function ajustarAlturaReal() {
     const vh = window.innerHeight * 0.01;
@@ -53,7 +55,7 @@ setTimeout(() => {
     if(appTitles) appTitles.forEach(el => el.innerText = NOME_APP);
 }, 100);
 
-// --- 1. MONITOR DE LOGIN & PRESENÇA ---
+// 1. MONITOR DE LOGIN & PRESENÇA
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioAtual = user;
@@ -65,8 +67,6 @@ onAuthStateChanged(auth, async (user) => {
             mostrarTela('contactsScreen');
             carregarContatosDoBanco();
             verificarEAtualizarToken();
-            
-            // Inicia o "Heartbeat" (sinal de vida) para ficar online
             iniciarPresenca();
         } else {
             mostrarTela('profileScreen');
@@ -80,31 +80,18 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- LÓGICA DE PRESENÇA (ONLINE) 🟢 ---
 function iniciarPresenca() {
-    // Atualiza o banco a cada 2 minutos dizendo "Estou aqui"
     const atualizarStatus = async () => {
         if(usuarioAtual) {
             const userRef = doc(db, "usuarios", usuarioAtual.email);
-            await updateDoc(userRef, {
-                online: true,
-                vistoPorUltimo: serverTimestamp()
-            });
+            await updateDoc(userRef, { online: true, vistoPorUltimo: serverTimestamp() });
         }
     };
-    atualizarStatus(); // Chama agora
-    setInterval(atualizarStatus, 120000); // Repete a cada 2 min
-
-    // Tenta marcar como offline ao fechar a aba (nem sempre funciona, mas ajuda)
-    window.addEventListener('beforeunload', () => {
-        if(usuarioAtual) {
-            // Usando sendBeacon para garantir envio ao fechar
-            // Obs: Firestore REST API seria ideal aqui, mas vamos simplificar
-        }
-    });
+    atualizarStatus();
+    setInterval(atualizarStatus, 120000);
 }
 
-// --- 2. NOTIFICAÇÕES (MANTIDO) ---
+// 2. NOTIFICAÇÕES
 async function verificarEAtualizarToken() {
     if (!("Notification" in window)) return;
     if (Notification.permission === "granted") {
@@ -116,7 +103,6 @@ async function verificarEAtualizarToken() {
         document.getElementById('avisoNotificacao').style.display = 'none';
     }
 }
-
 window.solicitarPermissaoNotificacao = async function() {
     try {
         const permission = await Notification.requestPermission();
@@ -129,7 +115,6 @@ window.solicitarPermissaoNotificacao = async function() {
         }
     } catch (error) { console.error(error); }
 }
-
 async function salvarTokenNoBanco() {
     try {
         const swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
@@ -140,7 +125,6 @@ async function salvarTokenNoBanco() {
         }
     } catch (err) { console.log("Erro token:", err); }
 }
-
 const btnAviso = document.getElementById('avisoNotificacao');
 if(btnAviso) btnAviso.addEventListener('click', window.solicitarPermissaoNotificacao);
 
@@ -159,18 +143,16 @@ function chamarCarteiro(textoMensagem) {
     }
 }
 
-// --- 3. PERFIL (MANTIDO) ---
+// 3. PERFIL
 window.salvarPerfil = async function() {
     const nome = document.getElementById('profileName').value.trim();
     const status = document.getElementById('profileStatus').value.trim();
     const btn = document.querySelector('.btn-save');
     if(!nome) return alert("Digite seu nome.");
     btn.innerText = "Salvando..."; btn.disabled = true;
-
     try {
         let fotoUrl = "https://cdn-icons-png.flaticon.com/512/847/847969.png";
         if (perfilUsuarioAtual && perfilUsuarioAtual.foto) fotoUrl = perfilUsuarioAtual.foto;
-
         const inputFoto = document.getElementById('profilePhotoInput');
         if (inputFoto.files[0]) {
             const arquivo = inputFoto.files[0];
@@ -178,10 +160,8 @@ window.salvarPerfil = async function() {
             await uploadBytes(storageRef, arquivo);
             fotoUrl = await getDownloadURL(storageRef);
         }
-
         const dadosPerfil = { nome: nome, status: status || "Usando o Zap", foto: fotoUrl, email: usuarioAtual.email, online: true, vistoPorUltimo: serverTimestamp() };
         if (perfilUsuarioAtual && perfilUsuarioAtual.tokenFcm) dadosPerfil.tokenFcm = perfilUsuarioAtual.tokenFcm;
-
         await setDoc(doc(db, "usuarios", usuarioAtual.email), dadosPerfil);
         perfilUsuarioAtual = dadosPerfil;
         alert("Perfil salvo!");
@@ -206,7 +186,7 @@ window.editarMeuPerfil = function() {
     mostrarTela('profileScreen');
 }
 
-// --- 4. CONTATOS (MANTIDO) ---
+// 4. CONTATOS
 function carregarContatosDoBanco() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = '<div style="text-align:center; padding:20px;">Carregando...</div>';
@@ -247,116 +227,71 @@ function monitorarNaoLidas(userContato, safeId) {
     });
 }
 
-// --- 5. CHAT (COM STATUS E DIGITANDO) ---
+// 5. CHAT
 window.abrirConversa = function(userDestino) {
     contatoAtual = userDestino;
     const emails = [usuarioAtual.email.toLowerCase(), userDestino.email.toLowerCase()].sort();
     chatIdAtual = emails.join('_');
-
     document.getElementById('chatTitle').innerText = userDestino.nome;
     document.getElementById('chatStatus').innerText = "Carregando status...";
     document.getElementById('chatHeaderAvatar').src = userDestino.foto;
-    
     mostrarTela('chatScreen');
     primeiroCarregamento = true;
     iniciarEscutaMensagens();
     marcarMensagensComoLidas(userDestino.email.toLowerCase(), usuarioAtual.email.toLowerCase());
-    
-    // Inicia monitores de status e digitando
     monitorarStatusContato(userDestino.email);
     monitorarSeEleEstaDigitando(userDestino.email.toLowerCase());
 }
-
-// Monitora se o contato está online ou visto por último
 function monitorarStatusContato(emailContato) {
     if (unsubscribeStatus) unsubscribeStatus();
-    
     unsubscribeStatus = onSnapshot(doc(db, "usuarios", emailContato), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             const elStatus = document.getElementById('chatStatus');
-            
-            // Verificamos se "Digitando" está ativo primeiro
             const isDigitando = document.getElementById('chatStatus').classList.contains('status-digitando');
-            if(isDigitando) return; // Se estiver digitando, não sobrescreve com "Online"
-
-            // Lógica Online: Se atualizou o 'vistoPorUltimo' nos últimos 3 minutos
+            if(isDigitando) return;
             const agora = new Date();
             let isOnline = false;
             let textoVisto = "";
-
             if (data.vistoPorUltimo) {
                 const ultimo = data.vistoPorUltimo.toDate();
                 const diffMinutos = (agora - ultimo) / 1000 / 60;
-                
-                if (diffMinutos < 3) {
-                    isOnline = true;
-                } else {
+                if (diffMinutos < 3) { isOnline = true; } 
+                else {
                     const hora = ultimo.getHours().toString().padStart(2,'0') + ":" + ultimo.getMinutes().toString().padStart(2,'0');
                     textoVisto = `Visto hoje às ${hora}`;
                 }
             }
-
-            if (isOnline) {
-                elStatus.innerText = "Online";
-                elStatus.className = "status-online";
-            } else {
-                elStatus.innerText = textoVisto || data.status; // Mostra visto ou a frase
-                elStatus.className = "";
-            }
+            if (isOnline) { elStatus.innerText = "Online"; elStatus.className = "status-online"; } 
+            else { elStatus.innerText = textoVisto || data.status; elStatus.className = ""; }
         }
     });
 }
-
-// --- LÓGICA DE DIGITANDO ✍️ ---
 window.avisarDigitando = async function() {
-    // 1. Atualiza no banco que EU estou digitando para esse chat
-    // Vamos usar uma coleção separada "conversa_status" para não poluir
     const statusRef = doc(db, "conversa_status", chatIdAtual);
     const meuEmail = usuarioAtual.email.toLowerCase();
-    
-    const dados = {};
-    dados[`digitando_${meuEmail.replace(/\./g, '_')}`] = true; // Encode email para campo
-    
+    const dados = {}; dados[`digitando_${meuEmail.replace(/\./g, '_')}`] = true;
     await setDoc(statusRef, dados, { merge: true });
-
-    // 2. Timer para parar de avisar se eu parar de digitar
     if (timeoutDigitando) clearTimeout(timeoutDigitando);
-    
     timeoutDigitando = setTimeout(async () => {
-        const dadosOff = {};
-        dadosOff[`digitando_${meuEmail.replace(/\./g, '_')}`] = false;
+        const dadosOff = {}; dadosOff[`digitando_${meuEmail.replace(/\./g, '_')}`] = false;
         await setDoc(statusRef, dadosOff, { merge: true });
-    }, 2500); // 2.5 segundos depois de parar
+    }, 2500);
 }
-
 function monitorarSeEleEstaDigitando(emailDele) {
     if (unsubscribeDigitando) unsubscribeDigitando();
-    
     const statusRef = doc(db, "conversa_status", chatIdAtual);
     unsubscribeDigitando = onSnapshot(statusRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
             const campo = `digitando_${emailDele.replace(/\./g, '_')}`;
             const eleEstaDigitando = data[campo];
-            
             const elStatus = document.getElementById('chatStatus');
-            
-            if (eleEstaDigitando) {
-                elStatus.innerText = "Digitando...";
-                elStatus.className = "status-digitando";
-            } else {
-                // Se parou de digitar, força atualizar o status online de novo
-                // (O onSnapshot do usuario vai corrigir, mas podemos chamar aqui pra ser rápido)
-                monitorarStatusContato(contatoAtual.email); 
-            }
+            if (eleEstaDigitando) { elStatus.innerText = "Digitando..."; elStatus.className = "status-digitando"; } 
+            else { monitorarStatusContato(contatoAtual.email); }
         }
     });
 }
-
-// ... Resto das funções de mensagem (marcarComoLidas, iniciarEscuta, etc) IGUAIS ...
-// Vou replicar aqui para o arquivo ficar completo
-
 async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     const q = query(collection(db, "mensagens"), where("remetente", "==", emailRemetente), where("destinatario", "==", emailDestinatario), where("lido", "==", false));
     const snapshot = await getDocs(q);
@@ -364,19 +299,16 @@ async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     snapshot.forEach(doc => batch.update(doc.ref, { lido: true }));
     if (!snapshot.empty) await batch.commit();
 }
-
 window.voltarParaContatos = function() {
     if(unsubscribeChat) unsubscribeChat();
     if(unsubscribeStatus) unsubscribeStatus();
     if(unsubscribeDigitando) unsubscribeDigitando();
     mostrarTela('contactsScreen');
 }
-
 function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
     const q = query(collection(db, "mensagens"), where("chatId", "==", chatIdAtual), orderBy("data", "asc"));
-
     unsubscribeChat = onSnapshot(q, (snapshot) => {
         if (!primeiroCarregamento) {
             snapshot.docChanges().forEach((change) => {
@@ -391,9 +323,7 @@ function iniciarEscutaMensagens() {
         }
         primeiroCarregamento = false;
         chatBox.innerHTML = "";
-        
         if(snapshot.empty) { chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">Nenhuma mensagem.<br>Diga Oi! 👋</div>'; return; }
-
         snapshot.forEach((docSnapshot) => {
             const msg = docSnapshot.data();
             const div = document.createElement('div');
@@ -402,12 +332,10 @@ function iniciarEscutaMensagens() {
             let statusIcon = "";
             if(souEu) statusIcon = msg.lido ? " <span style='color:#4fc3f7;'>✓✓</span>" : " <span style='color:#999;'>✓</span>";
             if (souEu) div.addEventListener('dblclick', async () => { if (confirm("Apagar?")) await deleteDoc(doc(db, "mensagens", docSnapshot.id)); });
-
             let hora = msg.data ? msg.data.toDate().getHours().toString().padStart(2,'0') + ":" + msg.data.toDate().getMinutes().toString().padStart(2,'0') : "...";
             let conteudoHTML = msg.texto;
             if (msg.tipo === 'imagem') conteudoHTML = `<img src="${msg.texto}" alt="Foto" loading="lazy">`;
             if (msg.tipo === 'audio') conteudoHTML = `<audio controls src="${msg.texto}"></audio>`;
-
             div.innerHTML = `${conteudoHTML} <span class="msg-time">${hora}${statusIcon}</span>`;
             chatBox.appendChild(div);
         });
@@ -427,20 +355,72 @@ window.enviarMensagem = async function(e) {
     } catch(err) { console.error(err); }
 }
 
-// --- MANIPULADOR DE ARQUIVOS (AGORA COM SUPORTE A CÂMERA) ---
-async function enviarArquivoComum(evento) { processarEnvioArquivo(evento.target.files[0]); evento.target.value = ""; }
-async function enviarFotoCamera(evento) { processarEnvioArquivo(evento.target.files[0]); evento.target.value = ""; }
+// --- LOGICA DO PREVIEW DE IMAGEM 🖼️ ---
+// Quando usuário seleciona Galeria
+async function enviarArquivoComum(evento) {
+    abrirModalPreview(evento.target.files[0]);
+    evento.target.value = ""; // Limpa input para poder selecionar o mesmo arquivo se quiser
+}
+// Quando usuário tira foto na Câmera
+async function enviarFotoCamera(evento) {
+    abrirModalPreview(evento.target.files[0]);
+    evento.target.value = ""; 
+}
 
-async function processarEnvioArquivo(arquivo) {
+function abrirModalPreview(arquivo) {
     if (!arquivo) return;
+    
+    // Salva na variável global
+    arquivoParaEnvio = arquivo;
+
+    // Mostra a imagem na tela
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('imgPreviewToSend').src = e.target.result;
+        document.getElementById('imagePreviewModal').classList.add('active'); // Abre modal
+    }
+    reader.readAsDataURL(arquivo);
+}
+
+window.cancelarEnvioFoto = function() {
+    arquivoParaEnvio = null;
+    document.getElementById('imagePreviewModal').classList.remove('active'); // Fecha modal
+}
+
+window.confirmarEnvioFoto = async function() {
+    if (!arquivoParaEnvio) return;
+    
+    const btnConfirm = document.querySelector('.btn-confirm');
+    btnConfirm.innerText = "Enviando...";
+    btnConfirm.disabled = true;
+
     try {
-        const nomeArquivo = Date.now() + "_" + arquivo.name;
+        const nomeArquivo = Date.now() + "_" + arquivoParaEnvio.name;
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
-        await uploadBytes(storageRef, arquivo);
+        await uploadBytes(storageRef, arquivoParaEnvio);
         const url = await getDownloadURL(storageRef);
-        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, tipo: "imagem", data: serverTimestamp() });
+        
+        await addDoc(collection(db, "mensagens"), { 
+            chatId: chatIdAtual, 
+            texto: url, 
+            remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), 
+            lido: false, 
+            tipo: "imagem", 
+            data: serverTimestamp() 
+        });
         chamarCarteiro("📷 Foto enviada");
-    } catch (e) { console.error(e); }
+        
+    } catch (e) { 
+        console.error(e); 
+        alert("Erro ao enviar foto.");
+    } finally {
+        // Limpa tudo e fecha o modal
+        arquivoParaEnvio = null;
+        document.getElementById('imagePreviewModal').classList.remove('active');
+        btnConfirm.innerText = "✅ Enviar";
+        btnConfirm.disabled = false;
+    }
 }
 
 async function alternarGravacao() {
@@ -465,9 +445,8 @@ async function alternarGravacao() {
     } else { mediaRecorder.stop(); btnMic.classList.remove("gravando"); btnMic.innerText = "🎤"; }
 }
 
-// Listeners
 const inputFile = document.getElementById('fileInput'); if(inputFile) inputFile.addEventListener('change', enviarArquivoComum);
-const inputCamera = document.getElementById('cameraInput'); if(inputCamera) inputCamera.addEventListener('change', enviarFotoCamera); // Listener da Câmera
+const inputCamera = document.getElementById('cameraInput'); if(inputCamera) inputCamera.addEventListener('change', enviarFotoCamera);
 const btnMic = document.getElementById('btnMic'); if(btnMic) btnMic.addEventListener('click', alternarGravacao);
 
 window.limparConversaInteira = async function() {
@@ -484,4 +463,3 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
-
