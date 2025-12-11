@@ -33,7 +33,7 @@ let chatIdAtual = null;
 let unsubscribeChat = null; 
 let unsubscribeStatus = null;
 let unsubscribeDigitando = null;
-let unsubscribeEntrega = null; // NOVO: Monitor de entrega
+let unsubscribeEntrega = null; 
 let timeoutDigitando = null;
 
 let primeiroCarregamento = true;
@@ -72,7 +72,7 @@ window.addEventListener('visibilitychange', () => {
     }
 });
 
-// 1. MONITOR DE LOGIN & PRESENÇA (COM SPLASH SCREEN)
+// 1. MONITOR DE LOGIN & PRESENÇA
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioAtual = user;
@@ -86,8 +86,6 @@ onAuthStateChanged(auth, async (user) => {
             verificarEAtualizarToken();
             iniciarPresenca();
             limparNotificacoesDoAndroid();
-            
-            // Inicia o monitor de entrega para marcar msgs como recebidas
             monitorarEntregasParaMim(); 
         } else {
             mostrarTela('profileScreen');
@@ -97,13 +95,13 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         usuarioAtual = null;
         perfilUsuarioAtual = null;
-        // Agora sim mostra o login (remove o carregamento)
         mostrarTela('loginScreen');
     }
 });
 
-// --- LÓGICA DE ENTREGA (2 TICKS CINZA) ---
 function monitorarEntregasParaMim() {
+    if (!usuarioAtual || !usuarioAtual.email) return; // Proteção extra
+
     const q = query(
         collection(db, "mensagens"), 
         where("destinatario", "==", usuarioAtual.email.toLowerCase()),
@@ -114,7 +112,6 @@ function monitorarEntregasParaMim() {
         if (!snapshot.empty) {
             const batch = writeBatch(db);
             snapshot.forEach((docSnap) => {
-                // Marca como entregue (O remetente vai ver os 2 ticks cinza)
                 batch.update(docSnap.ref, { entregue: true });
             });
             batch.commit().catch(e => console.log("Erro entrega:", e));
@@ -226,26 +223,41 @@ window.editarMeuPerfil = function() {
     mostrarTela('profileScreen');
 }
 
-// 4. CONTATOS
+// 4. CONTATOS (CORRIGIDO PARA NÃO TRAVAR COM DADOS FALTANDO) 🛡️
 function carregarContatosDoBanco() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = '<div style="text-align:center; padding:20px;">Carregando...</div>';
+    
+    if(!usuarioAtual || !usuarioAtual.email) return;
+
     const q = query(collection(db, "usuarios"));
     onSnapshot(q, (snapshot) => {
         lista.innerHTML = "";
         const emailLogado = usuarioAtual.email.toLowerCase();
+        
         snapshot.forEach((doc) => {
             const user = doc.data();
+            
+            // --- PROTEÇÃO CONTRA ERRO ---
+            // Se o usuário não tiver e-mail, ignora ele e pula para o próximo
+            if (!user || !user.email) {
+                console.warn("Usuário ignorado (sem e-mail):", doc.id);
+                return; 
+            }
+            // -----------------------------
+
             if (user.email.toLowerCase() === emailLogado) return;
+            
             const div = document.createElement('div');
             div.className = 'contact-card';
             div.onclick = () => abrirConversa(user);
             const safeId = user.email.replace(/[^a-zA-Z0-9]/g, '');
+            
             div.innerHTML = `
-                <img class="avatar" src="${user.foto}" alt="Avatar">
+                <img class="avatar" src="${user.foto || 'https://cdn-icons-png.flaticon.com/512/847/847969.png'}" alt="Avatar">
                 <div class="contact-info">
-                    <div class="contact-name">${user.nome}</div>
-                    <div class="contact-status">${user.status}</div>
+                    <div class="contact-name">${user.nome || 'Desconhecido'}</div>
+                    <div class="contact-status">${user.status || ''}</div>
                 </div>
                 <span id="badge-${safeId}" class="badge">0</span>
             `;
@@ -254,7 +266,10 @@ function carregarContatosDoBanco() {
         });
     });
 }
+
 function monitorarNaoLidas(userContato, safeId) {
+    if(!userContato || !userContato.email) return; // Proteção aqui também
+
     const emailLogado = usuarioAtual.email.toLowerCase();
     const q = query(collection(db, "mensagens"), where("remetente", "==", userContato.email.toLowerCase()), where("destinatario", "==", emailLogado), where("lido", "==", false));
     onSnapshot(q, (snapshot) => {
@@ -337,7 +352,6 @@ async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     const q = query(collection(db, "mensagens"), where("remetente", "==", emailRemetente), where("destinatario", "==", emailDestinatario), where("lido", "==", false));
     const snapshot = await getDocs(q);
     const batch = writeBatch(db); 
-    // Além de ler, também garante que está entregue
     snapshot.forEach(doc => batch.update(doc.ref, { lido: true, entregue: true }));
     if (!snapshot.empty) await batch.commit();
 }
@@ -348,7 +362,7 @@ window.voltarParaContatos = function() {
     mostrarTela('contactsScreen');
 }
 
-// VISUAL DO CHAT (TICKS)
+// VISUAL DO CHAT
 function iniciarEscutaMensagens() {
     const chatBox = document.getElementById('messagesList');
     chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#666">Carregando...</div>';
@@ -375,17 +389,11 @@ function iniciarEscutaMensagens() {
             const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
             
-            // Lógica dos Ticks
             let statusHTML = "";
             if(souEu) {
-                if (msg.lido) {
-                    statusHTML = "<span class='tick-status tick-lido'>✓✓</span>"; // 2 Azuis
-                } else if (msg.entregue) {
-                    statusHTML = "<span class='tick-status tick-entregue'>✓✓</span>"; // 2 Cinzas
-                } else {
-                    statusHTML = "<span class='tick-status tick-enviado'>✓</span>"; // 1 Cinza
-                }
-                
+                if (msg.lido) { statusHTML = "<span class='tick-status tick-lido'>✓✓</span>"; } 
+                else if (msg.entregue) { statusHTML = "<span class='tick-status tick-entregue'>✓✓</span>"; } 
+                else { statusHTML = "<span class='tick-status tick-enviado'>✓</span>"; }
                 div.addEventListener('dblclick', async () => { if (confirm("Apagar?")) await deleteDoc(doc(db, "mensagens", docSnapshot.id)); });
             }
 
@@ -393,7 +401,6 @@ function iniciarEscutaMensagens() {
             let conteudoHTML = msg.texto;
             if (msg.tipo === 'imagem') conteudoHTML = `<img src="${msg.texto}" alt="Foto" loading="lazy">`;
             if (msg.tipo === 'audio') conteudoHTML = `<audio controls src="${msg.texto}"></audio>`;
-            
             div.innerHTML = `${conteudoHTML} <span class="msg-time">${hora}${statusHTML}</span>`;
             chatBox.appendChild(div);
         });
@@ -402,7 +409,7 @@ function iniciarEscutaMensagens() {
 }
 function tocarAlerta() { somNotificacao.play().catch(e=>{}); }
 
-// ENVIOS (Agora com entregue: false)
+// ENVIOS
 window.enviarMensagem = async function(e) {
     e.preventDefault();
     const input = document.getElementById('msgInput');
@@ -410,14 +417,8 @@ window.enviarMensagem = async function(e) {
     if(!texto || !contatoAtual) return;
     try {
         await addDoc(collection(db, "mensagens"), { 
-            chatId: chatIdAtual, 
-            texto: texto, 
-            remetente: usuarioAtual.email.toLowerCase(), 
-            destinatario: contatoAtual.email.toLowerCase(), 
-            lido: false, 
-            entregue: false, // NOVO CAMPO
-            tipo: "texto", 
-            data: serverTimestamp() 
+            chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "texto", data: serverTimestamp() 
         });
         chamarCarteiro(texto);
         input.value = ""; input.focus();
@@ -432,14 +433,8 @@ async function processarEnvioArquivo(arquivo) {
         await uploadBytes(storageRef, arquivo);
         const url = await getDownloadURL(storageRef);
         await addDoc(collection(db, "mensagens"), { 
-            chatId: chatIdAtual, 
-            texto: url, 
-            remetente: usuarioAtual.email.toLowerCase(), 
-            destinatario: contatoAtual.email.toLowerCase(), 
-            lido: false, 
-            entregue: false, // NOVO CAMPO
-            tipo: "imagem", 
-            data: serverTimestamp() 
+            chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "imagem", data: serverTimestamp() 
         });
         chamarCarteiro("📷 Foto enviada");
     } catch (e) { console.error(e); }
@@ -513,4 +508,3 @@ window.fazerLogin = function() {
     signInWithEmailAndPassword(auth, email.trim(), pass).catch(e => { document.getElementById('loginError').innerText = "Erro: " + e.message; });
 }
 window.fazerLogout = function() { signOut(auth); }
-
