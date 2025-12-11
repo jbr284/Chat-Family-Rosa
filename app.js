@@ -1,6 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-// Adicionado 'deleteField' para poder limpar tokens ruins
 import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, getDocs, writeBatch, setDoc, getDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
@@ -57,22 +56,41 @@ setTimeout(() => {
     if(appTitles) appTitles.forEach(el => el.innerText = NOME_APP);
 }, 100);
 
+// --- LIMPEZA DE NOTIFICAÇÕES (VERSÃO TURBINADA) 🧹 ---
 async function limparNotificacoesDoAndroid() {
-    if ('serviceWorker' in navigator) {
-        try {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            for (let registration of registrations) {
-                const notifications = await registration.getNotifications();
-                notifications.forEach(notification => notification.close());
-            }
-        } catch (e) { console.log("Erro ao limpar notificações:", e); }
+    if (!('serviceWorker' in navigator)) return;
+
+    try {
+        // 1. Pega o registro ativo garantido
+        const registration = await navigator.serviceWorker.ready;
+        
+        // 2. Busca as notificações
+        const notifications = await registration.getNotifications();
+        
+        // 3. Fecha uma por uma
+        notifications.forEach(notification => {
+            notification.close();
+        });
+        
+        if (notifications.length > 0) {
+            console.log(`🧹 Limpeza: ${notifications.length} notificações removidas.`);
+        }
+    } catch (e) { 
+        console.log("Erro ao limpar notificações:", e); 
     }
 }
 
+// Gatilho 1: Quando a aba fica visível
 window.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-        limparNotificacoesDoAndroid();
+        // Pequeno delay para garantir que o navegador "acordou" e carregou a lista
+        setTimeout(limparNotificacoesDoAndroid, 500);
     }
+});
+
+// Gatilho 2: Quando a janela ganha foco (clique/toque)
+window.addEventListener('focus', () => {
+    setTimeout(limparNotificacoesDoAndroid, 500);
 });
 
 // 1. MONITOR DE LOGIN
@@ -89,7 +107,7 @@ onAuthStateChanged(auth, async (user) => {
                 carregarContatosDoBanco();
                 verificarEAtualizarToken();
                 iniciarPresenca();
-                limparNotificacoesDoAndroid();
+                setTimeout(limparNotificacoesDoAndroid, 1000); // Limpa ao logar também
                 monitorarEntregasParaMim(); 
             } else {
                 mostrarTela('profileScreen');
@@ -126,10 +144,7 @@ function monitorarEntregasParaMim() {
             });
             batch.commit().catch(e => console.log("Erro entrega:", e));
         }
-    }, (error) => {
-        // Silencia erros de permissão se ocorrerem
-        // console.log("Erro monitor entrega:", error);
-    });
+    }, (error) => {});
 }
 
 function iniciarPresenca() {
@@ -172,7 +187,7 @@ window.solicitarPermissaoNotificacao = async function() {
 async function salvarTokenNoBanco() {
     try {
         await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-        const registration = await navigator.serviceWorker.ready; // Espera ficar pronto
+        const registration = await navigator.serviceWorker.ready;
 
         const token = await getToken(messaging, { 
             vapidKey: VAPID_KEY, 
@@ -190,7 +205,7 @@ async function salvarTokenNoBanco() {
 const btnAviso = document.getElementById('avisoNotificacao');
 if(btnAviso) btnAviso.addEventListener('click', window.solicitarPermissaoNotificacao);
 
-// --- FUNÇÃO DO CARTEIRO COM AUTO-CORREÇÃO DE TOKEN ---
+// --- FUNÇÃO DO CARTEIRO COM AUTO-CORREÇÃO ---
 function chamarCarteiro(textoMensagem) {
     if (contatoAtual && contatoAtual.tokenFcm) {
         fetch(URL_BACKEND, {
@@ -206,14 +221,11 @@ function chamarCarteiro(textoMensagem) {
         .then(async (response) => {
             const data = await response.json();
             
-            // Se o servidor avisar que o token não existe mais ou é inválido
             if (data.error && (data.error.code === 'messaging/registration-token-not-registered' || data.error.code === 'messaging/invalid-argument')) {
-                console.warn("⚠️ Token antigo detectado. Removendo do banco para forçar atualização...");
-                
-                // Remove o token do usuário destino para evitar tentar de novo
+                console.warn("⚠️ Token antigo detectado. Removendo do banco...");
                 const userRef = doc(db, "usuarios", contatoAtual.email);
                 await updateDoc(userRef, {
-                    tokenFcm: deleteField() // Apaga o campo do banco
+                    tokenFcm: deleteField() 
                 });
             }
         })
@@ -281,8 +293,7 @@ function carregarContatosDoBanco() {
         
         snapshot.forEach((doc) => {
             const user = doc.data();
-            // Pula usuários sem email
-            if (!user || !user.email) return;
+            if (!user || !user.email) return; // Pula usuários sem email
 
             if (user.email.toLowerCase() === emailLogado) return;
             
@@ -329,7 +340,10 @@ window.abrirConversa = function(userDestino) {
     document.getElementById('chatStatus').innerText = "Carregando status...";
     document.getElementById('chatHeaderAvatar').src = userDestino.foto;
     mostrarTela('chatScreen');
-    limparNotificacoesDoAndroid();
+    
+    // Limpa notificações ao entrar no chat
+    setTimeout(limparNotificacoesDoAndroid, 500); 
+
     primeiroCarregamento = true;
     iniciarEscutaMensagens();
     marcarMensagensComoLidas(userDestino.email.toLowerCase(), usuarioAtual.email.toLowerCase());
@@ -360,7 +374,7 @@ function monitorarStatusContato(emailContato) {
             if (isOnline) { elStatus.innerText = "Online"; elStatus.className = "status-online"; } 
             else { elStatus.innerText = textoVisto || data.status; elStatus.className = ""; }
         }
-    }, (error) => {}); // Silencia erro se houver
+    }, (error) => {});
 }
 window.avisarDigitando = async function() {
     const statusRef = doc(db, "conversa_status", chatIdAtual);
