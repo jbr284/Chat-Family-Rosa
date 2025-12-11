@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, getDocs, writeBatch, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+// Adicionado 'deleteField' para poder limpar tokens ruins
+import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc, getDocs, writeBatch, setDoc, getDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging.js";
 
@@ -97,7 +98,6 @@ onAuthStateChanged(auth, async (user) => {
             }
         } catch (e) {
             console.error("Erro ao carregar perfil:", e);
-            // Se der erro de permissão aqui, provavelmente são as regras do Firestore
         }
     } else {
         usuarioAtual = null;
@@ -127,7 +127,8 @@ function monitorarEntregasParaMim() {
             batch.commit().catch(e => console.log("Erro entrega:", e));
         }
     }, (error) => {
-        console.log("Erro no monitor de entregas (Permissão?):", error);
+        // Silencia erros de permissão se ocorrerem
+        // console.log("Erro monitor entrega:", error);
     });
 }
 
@@ -137,14 +138,14 @@ function iniciarPresenca() {
             const userRef = doc(db, "usuarios", usuarioAtual.email);
             try {
                 await updateDoc(userRef, { online: true, vistoPorUltimo: serverTimestamp() });
-            } catch(e) { console.log("Erro ao atualizar presença:", e); }
+            } catch(e) { /* Ignora erro de permissão */ }
         }
     };
     atualizarStatus();
     setInterval(atualizarStatus, 120000);
 }
 
-// 2. NOTIFICAÇÕES (CORRIGIDO ERRO DE SERVICE WORKER) ✅
+// 2. NOTIFICAÇÕES
 async function verificarEAtualizarToken() {
     if (!("Notification" in window)) return;
     if (Notification.permission === "granted") {
@@ -170,11 +171,8 @@ window.solicitarPermissaoNotificacao = async function() {
 
 async function salvarTokenNoBanco() {
     try {
-        // Registra o SW
         await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-        
-        // O PULO DO GATO: Espera ele ficar PRONTO/ATIVO antes de pedir o token
-        const registration = await navigator.serviceWorker.ready;
+        const registration = await navigator.serviceWorker.ready; // Espera ficar pronto
 
         const token = await getToken(messaging, { 
             vapidKey: VAPID_KEY, 
@@ -192,6 +190,7 @@ async function salvarTokenNoBanco() {
 const btnAviso = document.getElementById('avisoNotificacao');
 if(btnAviso) btnAviso.addEventListener('click', window.solicitarPermissaoNotificacao);
 
+// --- FUNÇÃO DO CARTEIRO COM AUTO-CORREÇÃO DE TOKEN ---
 function chamarCarteiro(textoMensagem) {
     if (contatoAtual && contatoAtual.tokenFcm) {
         fetch(URL_BACKEND, {
@@ -203,7 +202,22 @@ function chamarCarteiro(textoMensagem) {
                 corpo: textoMensagem,
                 link: window.location.href
             })
-        }).catch(e => console.error(e));
+        })
+        .then(async (response) => {
+            const data = await response.json();
+            
+            // Se o servidor avisar que o token não existe mais ou é inválido
+            if (data.error && (data.error.code === 'messaging/registration-token-not-registered' || data.error.code === 'messaging/invalid-argument')) {
+                console.warn("⚠️ Token antigo detectado. Removendo do banco para forçar atualização...");
+                
+                // Remove o token do usuário destino para evitar tentar de novo
+                const userRef = doc(db, "usuarios", contatoAtual.email);
+                await updateDoc(userRef, {
+                    tokenFcm: deleteField() // Apaga o campo do banco
+                });
+            }
+        })
+        .catch(e => console.error("Erro na requisição:", e));
     }
 }
 
@@ -250,7 +264,7 @@ window.editarMeuPerfil = function() {
     mostrarTela('profileScreen');
 }
 
-// 4. CONTATOS (BLINDAGEM CONTRA ERRO DE EMAIL) ✅
+// 4. CONTATOS (BLINDADO)
 function carregarContatosDoBanco() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = '<div style="text-align:center; padding:20px;">Carregando...</div>';
@@ -260,17 +274,14 @@ function carregarContatosDoBanco() {
     const q = query(collection(db, "usuarios"));
     
     unsubscribeContatos = onSnapshot(q, (snapshot) => {
-        // Blindagem: Se usuarioAtual estiver nulo, para tudo
         if (!usuarioAtual || !usuarioAtual.email) return;
 
         lista.innerHTML = "";
-        // Blindagem: Garante que é string ou vazio antes de lowerCase
         const emailLogado = (usuarioAtual.email || "").toLowerCase(); 
         
         snapshot.forEach((doc) => {
             const user = doc.data();
-            
-            // Pula usuários bugados (sem email)
+            // Pula usuários sem email
             if (!user || !user.email) return;
 
             if (user.email.toLowerCase() === emailLogado) return;
@@ -328,7 +339,6 @@ window.abrirConversa = function(userDestino) {
 function monitorarStatusContato(emailContato) {
     if (unsubscribeStatus) unsubscribeStatus();
     
-    // Tratamento de erro de permissão no status
     unsubscribeStatus = onSnapshot(doc(db, "usuarios", emailContato), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -350,9 +360,7 @@ function monitorarStatusContato(emailContato) {
             if (isOnline) { elStatus.innerText = "Online"; elStatus.className = "status-online"; } 
             else { elStatus.innerText = textoVisto || data.status; elStatus.className = ""; }
         }
-    }, (error) => {
-        console.log("Erro status (Permissão?):", error);
-    });
+    }, (error) => {}); // Silencia erro se houver
 }
 window.avisarDigitando = async function() {
     const statusRef = doc(db, "conversa_status", chatIdAtual);
@@ -360,7 +368,7 @@ window.avisarDigitando = async function() {
     const dados = {}; dados[`digitando_${meuEmail.replace(/\./g, '_')}`] = true;
     try {
         await setDoc(statusRef, dados, { merge: true });
-    } catch(e) { console.log("Erro digitando (Permissão?):", e); } // Silencia erro se regra bloquear
+    } catch(e) {}
 
     if (timeoutDigitando) clearTimeout(timeoutDigitando);
     timeoutDigitando = setTimeout(async () => {
@@ -381,7 +389,7 @@ function monitorarSeEleEstaDigitando(emailDele) {
             if (eleEstaDigitando) { elStatus.innerText = "Digitando..."; elStatus.className = "status-digitando"; } 
             else { monitorarStatusContato(contatoAtual.email); }
         }
-    }, (error) => { console.log("Erro monitor digitando (Permissão?):", error); });
+    }, (error) => {});
 }
 async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     const q = query(collection(db, "mensagens"), where("remetente", "==", emailRemetente), where("destinatario", "==", emailDestinatario), where("lido", "==", false));
@@ -446,7 +454,10 @@ window.enviarMensagem = async function(e) {
     const texto = input.value.trim();
     if(!texto || !contatoAtual) return;
     try {
-        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "texto", data: serverTimestamp() });
+        await addDoc(collection(db, "mensagens"), { 
+            chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "texto", data: serverTimestamp() 
+        });
         chamarCarteiro(texto);
         input.value = ""; input.focus();
     } catch(err) { console.error(err); }
@@ -458,7 +469,10 @@ async function processarEnvioArquivo(arquivo) {
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
         await uploadBytes(storageRef, arquivo);
         const url = await getDownloadURL(storageRef);
-        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "imagem", data: serverTimestamp() });
+        await addDoc(collection(db, "mensagens"), { 
+            chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), 
+            destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "imagem", data: serverTimestamp() 
+        });
         chamarCarteiro("📷 Foto enviada");
     } catch (e) { console.error(e); }
 }
