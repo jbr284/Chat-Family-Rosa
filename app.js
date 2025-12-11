@@ -30,12 +30,15 @@ let usuarioAtual = null;
 let perfilUsuarioAtual = null;
 let contatoAtual = null;
 let chatIdAtual = null;
+
+// Variáveis para controlar os "ouvintes" (Listeners) e evitar memória vazando
 let unsubscribeChat = null; 
 let unsubscribeStatus = null;
 let unsubscribeDigitando = null;
 let unsubscribeEntrega = null; 
-let timeoutDigitando = null;
+let unsubscribeContatos = null; // NOVO: Para controlar a lista de contatos
 
+let timeoutDigitando = null;
 let primeiroCarregamento = true;
 let mediaRecorder = null;
 let audioChunks = [];
@@ -95,12 +98,18 @@ onAuthStateChanged(auth, async (user) => {
     } else {
         usuarioAtual = null;
         perfilUsuarioAtual = null;
+        // Limpa ouvintes antigos ao deslogar
+        if(unsubscribeContatos) unsubscribeContatos();
+        if(unsubscribeEntrega) unsubscribeEntrega();
+        
         mostrarTela('loginScreen');
     }
 });
 
 function monitorarEntregasParaMim() {
-    if (!usuarioAtual || !usuarioAtual.email) return; // Proteção extra
+    if (!usuarioAtual || !usuarioAtual.email) return;
+
+    if(unsubscribeEntrega) unsubscribeEntrega(); // Limpa anterior se houver
 
     const q = query(
         collection(db, "mensagens"), 
@@ -223,28 +232,34 @@ window.editarMeuPerfil = function() {
     mostrarTela('profileScreen');
 }
 
-// 4. CONTATOS (CORRIGIDO PARA NÃO TRAVAR COM DADOS FALTANDO) 🛡️
+// 4. CONTATOS (AGORA TOTALMENTE BLINDADO) 🛡️
 function carregarContatosDoBanco() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = '<div style="text-align:center; padding:20px;">Carregando...</div>';
     
-    if(!usuarioAtual || !usuarioAtual.email) return;
+    // Cancela escuta anterior para não duplicar
+    if(unsubscribeContatos) unsubscribeContatos();
 
     const q = query(collection(db, "usuarios"));
-    onSnapshot(q, (snapshot) => {
+    
+    unsubscribeContatos = onSnapshot(q, (snapshot) => {
+        // BLINDAGEM 1: Se o usuário logado sumiu ou perdeu o email, aborta
+        if (!usuarioAtual || !usuarioAtual.email) {
+            console.log("Aguardando usuário carregar...");
+            return;
+        }
+
         lista.innerHTML = "";
-        const emailLogado = usuarioAtual.email.toLowerCase();
+        const emailLogado = usuarioAtual.email.toLowerCase(); // Agora é seguro chamar toLowerCase
         
         snapshot.forEach((doc) => {
             const user = doc.data();
             
-            // --- PROTEÇÃO CONTRA ERRO ---
-            // Se o usuário não tiver e-mail, ignora ele e pula para o próximo
+            // BLINDAGEM 2: Se o contato não tem email, ignora
             if (!user || !user.email) {
-                console.warn("Usuário ignorado (sem e-mail):", doc.id);
-                return; 
+                console.warn("Contato inválido ignorado:", doc.id);
+                return;
             }
-            // -----------------------------
 
             if (user.email.toLowerCase() === emailLogado) return;
             
@@ -256,7 +271,7 @@ function carregarContatosDoBanco() {
             div.innerHTML = `
                 <img class="avatar" src="${user.foto || 'https://cdn-icons-png.flaticon.com/512/847/847969.png'}" alt="Avatar">
                 <div class="contact-info">
-                    <div class="contact-name">${user.nome || 'Desconhecido'}</div>
+                    <div class="contact-name">${user.nome || 'Sem Nome'}</div>
                     <div class="contact-status">${user.status || ''}</div>
                 </div>
                 <span id="badge-${safeId}" class="badge">0</span>
@@ -268,7 +283,7 @@ function carregarContatosDoBanco() {
 }
 
 function monitorarNaoLidas(userContato, safeId) {
-    if(!userContato || !userContato.email) return; // Proteção aqui também
+    if(!userContato || !userContato.email || !usuarioAtual || !usuarioAtual.email) return;
 
     const emailLogado = usuarioAtual.email.toLowerCase();
     const q = query(collection(db, "mensagens"), where("remetente", "==", userContato.email.toLowerCase()), where("destinatario", "==", emailLogado), where("lido", "==", false));
