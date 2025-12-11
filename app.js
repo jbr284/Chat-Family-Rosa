@@ -31,12 +31,11 @@ let perfilUsuarioAtual = null;
 let contatoAtual = null;
 let chatIdAtual = null;
 
-// Variáveis para controlar os "ouvintes" (Listeners) e evitar memória vazando
 let unsubscribeChat = null; 
 let unsubscribeStatus = null;
 let unsubscribeDigitando = null;
 let unsubscribeEntrega = null; 
-let unsubscribeContatos = null; // NOVO: Para controlar a lista de contatos
+let unsubscribeContatos = null; 
 
 let timeoutDigitando = null;
 let primeiroCarregamento = true;
@@ -65,7 +64,7 @@ async function limparNotificacoesDoAndroid() {
                 const notifications = await registration.getNotifications();
                 notifications.forEach(notification => notification.close());
             }
-        } catch (e) { console.log("Erro ao limpar:", e); }
+        } catch (e) { console.log("Erro ao limpar notificações:", e); }
     }
 }
 
@@ -75,41 +74,43 @@ window.addEventListener('visibilitychange', () => {
     }
 });
 
-// 1. MONITOR DE LOGIN & PRESENÇA
+// 1. MONITOR DE LOGIN
 onAuthStateChanged(auth, async (user) => {
     if (user) {
         usuarioAtual = user;
         const docRef = doc(db, "usuarios", user.email);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-            perfilUsuarioAtual = docSnap.data();
-            mostrarTela('contactsScreen');
-            carregarContatosDoBanco();
-            verificarEAtualizarToken();
-            iniciarPresenca();
-            limparNotificacoesDoAndroid();
-            monitorarEntregasParaMim(); 
-        } else {
-            mostrarTela('profileScreen');
-            const nomeInput = document.getElementById('profileName');
-            if(nomeInput) nomeInput.value = user.displayName || "";
+        
+        try {
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                perfilUsuarioAtual = docSnap.data();
+                mostrarTela('contactsScreen');
+                carregarContatosDoBanco();
+                verificarEAtualizarToken();
+                iniciarPresenca();
+                limparNotificacoesDoAndroid();
+                monitorarEntregasParaMim(); 
+            } else {
+                mostrarTela('profileScreen');
+                const nomeInput = document.getElementById('profileName');
+                if(nomeInput) nomeInput.value = user.displayName || "";
+            }
+        } catch (e) {
+            console.error("Erro ao carregar perfil:", e);
+            // Se der erro de permissão aqui, provavelmente são as regras do Firestore
         }
     } else {
         usuarioAtual = null;
         perfilUsuarioAtual = null;
-        // Limpa ouvintes antigos ao deslogar
         if(unsubscribeContatos) unsubscribeContatos();
         if(unsubscribeEntrega) unsubscribeEntrega();
-        
         mostrarTela('loginScreen');
     }
 });
 
 function monitorarEntregasParaMim() {
     if (!usuarioAtual || !usuarioAtual.email) return;
-
-    if(unsubscribeEntrega) unsubscribeEntrega(); // Limpa anterior se houver
+    if(unsubscribeEntrega) unsubscribeEntrega(); 
 
     const q = query(
         collection(db, "mensagens"), 
@@ -125,21 +126,25 @@ function monitorarEntregasParaMim() {
             });
             batch.commit().catch(e => console.log("Erro entrega:", e));
         }
+    }, (error) => {
+        console.log("Erro no monitor de entregas (Permissão?):", error);
     });
 }
 
 function iniciarPresenca() {
     const atualizarStatus = async () => {
-        if(usuarioAtual) {
+        if(usuarioAtual && usuarioAtual.email) {
             const userRef = doc(db, "usuarios", usuarioAtual.email);
-            await updateDoc(userRef, { online: true, vistoPorUltimo: serverTimestamp() });
+            try {
+                await updateDoc(userRef, { online: true, vistoPorUltimo: serverTimestamp() });
+            } catch(e) { console.log("Erro ao atualizar presença:", e); }
         }
     };
     atualizarStatus();
     setInterval(atualizarStatus, 120000);
 }
 
-// 2. NOTIFICAÇÕES
+// 2. NOTIFICAÇÕES (CORRIGIDO ERRO DE SERVICE WORKER) ✅
 async function verificarEAtualizarToken() {
     if (!("Notification" in window)) return;
     if (Notification.permission === "granted") {
@@ -151,6 +156,7 @@ async function verificarEAtualizarToken() {
         document.getElementById('avisoNotificacao').style.display = 'none';
     }
 }
+
 window.solicitarPermissaoNotificacao = async function() {
     try {
         const permission = await Notification.requestPermission();
@@ -161,16 +167,28 @@ window.solicitarPermissaoNotificacao = async function() {
         } else { alert("Permissão negada."); }
     } catch (error) { console.error(error); }
 }
+
 async function salvarTokenNoBanco() {
     try {
-        const swRegistration = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
-        const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: swRegistration });
+        // Registra o SW
+        await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+        
+        // O PULO DO GATO: Espera ele ficar PRONTO/ATIVO antes de pedir o token
+        const registration = await navigator.serviceWorker.ready;
+
+        const token = await getToken(messaging, { 
+            vapidKey: VAPID_KEY, 
+            serviceWorkerRegistration: registration 
+        });
+
         if (token && usuarioAtual) {
             const userRef = doc(db, "usuarios", usuarioAtual.email);
             await setDoc(userRef, { tokenFcm: token }, { merge: true });
+            console.log("Token salvo com sucesso!");
         }
-    } catch (err) { console.log("Erro token:", err); }
+    } catch (err) { console.log("Erro token (SW):", err); }
 }
+
 const btnAviso = document.getElementById('avisoNotificacao');
 if(btnAviso) btnAviso.addEventListener('click', window.solicitarPermissaoNotificacao);
 
@@ -232,34 +250,28 @@ window.editarMeuPerfil = function() {
     mostrarTela('profileScreen');
 }
 
-// 4. CONTATOS (AGORA TOTALMENTE BLINDADO) 🛡️
+// 4. CONTATOS (BLINDAGEM CONTRA ERRO DE EMAIL) ✅
 function carregarContatosDoBanco() {
     const lista = document.getElementById('listaContatos');
     lista.innerHTML = '<div style="text-align:center; padding:20px;">Carregando...</div>';
     
-    // Cancela escuta anterior para não duplicar
     if(unsubscribeContatos) unsubscribeContatos();
 
     const q = query(collection(db, "usuarios"));
     
     unsubscribeContatos = onSnapshot(q, (snapshot) => {
-        // BLINDAGEM 1: Se o usuário logado sumiu ou perdeu o email, aborta
-        if (!usuarioAtual || !usuarioAtual.email) {
-            console.log("Aguardando usuário carregar...");
-            return;
-        }
+        // Blindagem: Se usuarioAtual estiver nulo, para tudo
+        if (!usuarioAtual || !usuarioAtual.email) return;
 
         lista.innerHTML = "";
-        const emailLogado = usuarioAtual.email.toLowerCase(); // Agora é seguro chamar toLowerCase
+        // Blindagem: Garante que é string ou vazio antes de lowerCase
+        const emailLogado = (usuarioAtual.email || "").toLowerCase(); 
         
         snapshot.forEach((doc) => {
             const user = doc.data();
             
-            // BLINDAGEM 2: Se o contato não tem email, ignora
-            if (!user || !user.email) {
-                console.warn("Contato inválido ignorado:", doc.id);
-                return;
-            }
+            // Pula usuários bugados (sem email)
+            if (!user || !user.email) return;
 
             if (user.email.toLowerCase() === emailLogado) return;
             
@@ -283,9 +295,9 @@ function carregarContatosDoBanco() {
 }
 
 function monitorarNaoLidas(userContato, safeId) {
-    if(!userContato || !userContato.email || !usuarioAtual || !usuarioAtual.email) return;
+    if(!userContato || !userContato.email || !usuarioAtual) return;
 
-    const emailLogado = usuarioAtual.email.toLowerCase();
+    const emailLogado = (usuarioAtual.email || "").toLowerCase();
     const q = query(collection(db, "mensagens"), where("remetente", "==", userContato.email.toLowerCase()), where("destinatario", "==", emailLogado), where("lido", "==", false));
     onSnapshot(q, (snapshot) => {
         const count = snapshot.size;
@@ -315,6 +327,8 @@ window.abrirConversa = function(userDestino) {
 }
 function monitorarStatusContato(emailContato) {
     if (unsubscribeStatus) unsubscribeStatus();
+    
+    // Tratamento de erro de permissão no status
     unsubscribeStatus = onSnapshot(doc(db, "usuarios", emailContato), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -336,22 +350,28 @@ function monitorarStatusContato(emailContato) {
             if (isOnline) { elStatus.innerText = "Online"; elStatus.className = "status-online"; } 
             else { elStatus.innerText = textoVisto || data.status; elStatus.className = ""; }
         }
+    }, (error) => {
+        console.log("Erro status (Permissão?):", error);
     });
 }
 window.avisarDigitando = async function() {
     const statusRef = doc(db, "conversa_status", chatIdAtual);
     const meuEmail = usuarioAtual.email.toLowerCase();
     const dados = {}; dados[`digitando_${meuEmail.replace(/\./g, '_')}`] = true;
-    await setDoc(statusRef, dados, { merge: true });
+    try {
+        await setDoc(statusRef, dados, { merge: true });
+    } catch(e) { console.log("Erro digitando (Permissão?):", e); } // Silencia erro se regra bloquear
+
     if (timeoutDigitando) clearTimeout(timeoutDigitando);
     timeoutDigitando = setTimeout(async () => {
         const dadosOff = {}; dadosOff[`digitando_${meuEmail.replace(/\./g, '_')}`] = false;
-        await setDoc(statusRef, dadosOff, { merge: true });
+        try { await setDoc(statusRef, dadosOff, { merge: true }); } catch(e){}
     }, 2500);
 }
 function monitorarSeEleEstaDigitando(emailDele) {
     if (unsubscribeDigitando) unsubscribeDigitando();
     const statusRef = doc(db, "conversa_status", chatIdAtual);
+    
     unsubscribeDigitando = onSnapshot(statusRef, (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
@@ -361,7 +381,7 @@ function monitorarSeEleEstaDigitando(emailDele) {
             if (eleEstaDigitando) { elStatus.innerText = "Digitando..."; elStatus.className = "status-digitando"; } 
             else { monitorarStatusContato(contatoAtual.email); }
         }
-    });
+    }, (error) => { console.log("Erro monitor digitando (Permissão?):", error); });
 }
 async function marcarMensagensComoLidas(emailRemetente, emailDestinatario) {
     const q = query(collection(db, "mensagens"), where("remetente", "==", emailRemetente), where("destinatario", "==", emailDestinatario), where("lido", "==", false));
@@ -397,13 +417,11 @@ function iniciarEscutaMensagens() {
         primeiroCarregamento = false;
         chatBox.innerHTML = "";
         if(snapshot.empty) { chatBox.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">Nenhuma mensagem.<br>Diga Oi! 👋</div>'; return; }
-        
         snapshot.forEach((docSnapshot) => {
             const msg = docSnapshot.data();
             const div = document.createElement('div');
             const souEu = msg.remetente.toLowerCase() === usuarioAtual.email.toLowerCase();
             div.className = `message ${souEu ? 'mine' : 'theirs'}`;
-            
             let statusHTML = "";
             if(souEu) {
                 if (msg.lido) { statusHTML = "<span class='tick-status tick-lido'>✓✓</span>"; } 
@@ -411,7 +429,6 @@ function iniciarEscutaMensagens() {
                 else { statusHTML = "<span class='tick-status tick-enviado'>✓</span>"; }
                 div.addEventListener('dblclick', async () => { if (confirm("Apagar?")) await deleteDoc(doc(db, "mensagens", docSnapshot.id)); });
             }
-
             let hora = msg.data ? msg.data.toDate().getHours().toString().padStart(2,'0') + ":" + msg.data.toDate().getMinutes().toString().padStart(2,'0') : "...";
             let conteudoHTML = msg.texto;
             if (msg.tipo === 'imagem') conteudoHTML = `<img src="${msg.texto}" alt="Foto" loading="lazy">`;
@@ -423,23 +440,17 @@ function iniciarEscutaMensagens() {
     });
 }
 function tocarAlerta() { somNotificacao.play().catch(e=>{}); }
-
-// ENVIOS
 window.enviarMensagem = async function(e) {
     e.preventDefault();
     const input = document.getElementById('msgInput');
     const texto = input.value.trim();
     if(!texto || !contatoAtual) return;
     try {
-        await addDoc(collection(db, "mensagens"), { 
-            chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), 
-            destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "texto", data: serverTimestamp() 
-        });
+        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: texto, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "texto", data: serverTimestamp() });
         chamarCarteiro(texto);
         input.value = ""; input.focus();
     } catch(err) { console.error(err); }
 }
-
 async function processarEnvioArquivo(arquivo) {
     if (!arquivo) return;
     try {
@@ -447,32 +458,20 @@ async function processarEnvioArquivo(arquivo) {
         const storageRef = ref(storage, `uploads/${chatIdAtual}/${nomeArquivo}`);
         await uploadBytes(storageRef, arquivo);
         const url = await getDownloadURL(storageRef);
-        await addDoc(collection(db, "mensagens"), { 
-            chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), 
-            destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "imagem", data: serverTimestamp() 
-        });
+        await addDoc(collection(db, "mensagens"), { chatId: chatIdAtual, texto: url, remetente: usuarioAtual.email.toLowerCase(), destinatario: contatoAtual.email.toLowerCase(), lido: false, entregue: false, tipo: "imagem", data: serverTimestamp() });
         chamarCarteiro("📷 Foto enviada");
     } catch (e) { console.error(e); }
 }
-
-// PREVIEW E CONFIRMAÇÃO
 async function enviarArquivoComum(evento) { abrirModalPreview(evento.target.files[0]); evento.target.value = ""; }
 async function enviarFotoCamera(evento) { abrirModalPreview(evento.target.files[0]); evento.target.value = ""; }
-
 function abrirModalPreview(arquivo) {
     if (!arquivo) return;
     arquivoParaEnvio = arquivo;
     const reader = new FileReader();
-    reader.onload = function(e) {
-        document.getElementById('imgPreviewToSend').src = e.target.result;
-        document.getElementById('imagePreviewModal').classList.add('active');
-    }
+    reader.onload = function(e) { document.getElementById('imgPreviewToSend').src = e.target.result; document.getElementById('imagePreviewModal').classList.add('active'); }
     reader.readAsDataURL(arquivo);
 }
-window.cancelarEnvioFoto = function() {
-    arquivoParaEnvio = null;
-    document.getElementById('imagePreviewModal').classList.remove('active');
-}
+window.cancelarEnvioFoto = function() { arquivoParaEnvio = null; document.getElementById('imagePreviewModal').classList.remove('active'); }
 window.confirmarEnvioFoto = async function() {
     if (!arquivoParaEnvio) return;
     const btnConfirm = document.querySelector('.btn-confirm');
@@ -482,7 +481,6 @@ window.confirmarEnvioFoto = async function() {
     document.getElementById('imagePreviewModal').classList.remove('active');
     btnConfirm.innerText = "✅ Enviar"; btnConfirm.disabled = false;
 }
-
 async function alternarGravacao() {
     const btnMic = document.getElementById('btnMic');
     if (!mediaRecorder || mediaRecorder.state === "inactive") {
@@ -504,11 +502,9 @@ async function alternarGravacao() {
         } catch (e) { alert("Erro Mic"); }
     } else { mediaRecorder.stop(); btnMic.classList.remove("gravando"); btnMic.innerText = "🎤"; }
 }
-
 const inputFile = document.getElementById('fileInput'); if(inputFile) inputFile.addEventListener('change', enviarArquivoComum);
 const inputCamera = document.getElementById('cameraInput'); if(inputCamera) inputCamera.addEventListener('change', enviarFotoCamera);
 const btnMic = document.getElementById('btnMic'); if(btnMic) btnMic.addEventListener('click', alternarGravacao);
-
 window.limparConversaInteira = async function() {
     if (!confirm("Apagar TUDO?")) return;
     const q = query(collection(db, "mensagens"), where("chatId", "==", chatIdAtual));
